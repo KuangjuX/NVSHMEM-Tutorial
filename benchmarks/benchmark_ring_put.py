@@ -45,64 +45,61 @@ def bootstrap_nvshmem():
 
 
 def benchmark_put_bandwidth(rank, world_size, size_bytes=1024*1024*128, n_warmup=10, n_reps=100):
-    """
-    Measures point-to-point put bandwidth between rank 0 and rank 1.
-    """
     if world_size < 2:
         if rank == 0:
             print("This benchmark requires at least 2 processes. Skipping.")
         return
+    
+    sbyte_tensor = nvshmem_ops.alloc_symmetric(size_bytes)
+    rbyte_tensor = nvshmem_ops.alloc_symmetric(size_bytes)
 
-    # Allocate a symmetric buffer on all PEs
-    # This buffer can be a source for puts and a destination for gets from other PEs
-    symmetric_buffer = nvshmem_ops.alloc_symmetric(size_bytes)
+    send_tensor = sbyte_tensor.view(torch.float32)
+    recv_tensor = rbyte_tensor.view(torch.float32)
+
+    num_elems = size_bytes // 4
     
-    # Rank 0 will send, Rank 1 will receive
-    src_pe = 0
-    dst_pe = 1
+    threads_per_block = 1024
+    num_blocks = (num_elems + threads_per_block - 1) // threads_per_block
+
+    if rank == 0:
+        print(f"num_elems: {num_elems}, num_blocks: {num_blocks}, threads_per_block: {threads_per_block}")
+
+    for _ in range(n_warmup):
+        recv_tensor.zero_()
+        nvshmem_ops.launch_ring_put_block(send_tensor, recv_tensor, num_blocks, threads_per_block)
+        nvshmem_ops.barrier_all()
     
-    # Barrier to ensure all allocations are complete before communication
+    torch.cuda.synchronize()
     nvshmem_ops.barrier_all()
 
-    if rank == src_pe:
-        # I am the sender. Create a local tensor to be the source of data.
-        # Initialize it with some values.
-        local_src_tensor = torch.ones(size_bytes, dtype=torch.uint8, device='cuda')
-        
-        print(f"\n--- Starting Put Bandwidth Benchmark ---")
-        print(f"Message Size: {size_bytes / 1024**2:.2f} MB")
-        print(f"Sender (PE {src_pe}) -> Receiver (PE {dst_pe})")
-        print(f"Warmup iterations: {n_warmup}")
-        print(f"Timed iterations: {n_reps}")
 
-        # Warmup runs
-        for _ in range(n_warmup):
-            nvshmem_ops.put_blocking(symmetric_buffer, local_src_tensor, dst_pe)
+    torch.cuda.synchronize()
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
 
-        # Timed runs
-        torch.cuda.synchronize()
-        start_time = time.perf_counter()
+    start_event.record()
+    for _ in range(n_reps):
+        nvshmem_ops.launch_ring_put_block(send_tensor, recv_tensor, num_blocks, threads_per_block)
+        nvshmem_ops.barrier_all()
 
-        for _ in range(n_reps):
-            nvshmem_ops.put_blocking(symmetric_buffer, local_src_tensor, dst_pe)
-        
-        torch.cuda.synchronize()
-        end_time = time.perf_counter()
+    end_event.record()
+    torch.cuda.synchronize()
+    nvshmem_ops.barrier_all()
 
-        # Calculate and print results
-        duration = end_time - start_time
-        total_data_gb = (size_bytes * n_reps) / 1024**3
-        bandwidth_gbps = total_data_gb / duration
-        
-        print("\n--- Results ---")
-        print(f"Total time for {n_reps} puts: {duration:.4f} seconds")
+    if rank == 0:
+        elapsed_time_ms = start_event.elapsed_time(end_event)
+        total_time_s = elapsed_time_ms / 1000.0
+        # 在 ring benchmark 中，每个 GPU 发送一次数据
+        total_data_bytes = size_bytes * n_reps 
+        # 带宽通常使用 10^9 (GB/s)，而不是 1024^3 (GiB/s)
+        bandwidth_gbps = (total_data_bytes / total_time_s) / 1e9 
         print(f"Bandwidth: {bandwidth_gbps:.2f} GB/s")
 
-    # Barrier to ensure the benchmark is complete before finalizing
-    nvshmem_ops.barrier_all()
+
+    # nvshmem_ops.free_symmetric(send_tensor)
+    # nvshmem_ops.free_symmetric(recv_tensor)
+
     
-
-
 def main():
     # Set the current CUDA device based on LOCAL_RANK provided by torchrun
     local_rank = int(os.environ["LOCAL_RANK"])
@@ -112,7 +109,7 @@ def main():
     rank, world_size = bootstrap_nvshmem()
 
     # Step 2: Run the performance test
-    benchmark_put_bandwidth(rank, world_size)
+    benchmark_put_bandwidth(rank, world_size, 8192)
 
     # # Step 3: Finalize NVSHMEM
     nvshmem_ops.finalize()

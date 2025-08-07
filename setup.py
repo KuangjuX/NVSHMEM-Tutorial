@@ -46,7 +46,8 @@ setup(
         CUDAExtension(
             name="_nvshmem_pybind_cpp",
             sources=[
-                "csrc/nvshmem.cpp",
+                "csrc/put.cu",
+                "csrc/pybind.cpp",
             ],
             include_dirs=include_dirs,
             library_dirs=library_dirs,

@@ -1,0 +1,42 @@
+# Run manually to reformat a file:
+# clang-format -i --style=file <file>
+BasedOnStyle: Google
+UseTab: Never
+ColumnLimit: 80
+IndentWidth: 2
+
+AccessModifierOffset: -1
+
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+IndentPPDirectives: BeforeHash
+
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '<([A-Za-z0-9\Q/-_\E])+>'
+    Priority: 4
+  - Regex: '<(catch2|boost)\/'
+    Priority: 3
+  - Regex: '<([A-Za-z0-9.\Q/-_\E])+>'
+    Priority: 2
+  - Regex: '"([A-Za-z0-9.\Q/-_\E])+"'
+    Priority: 1
+
+# If true, empty lines at the start of blocks are kept.
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+AllowShortLoopsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: true
+Cpp11BracedListStyle: true
+# If true, always break after the template<...> of a template declaration.
+AlwaysBreakTemplateDeclarations: true
+# If false, a function declaration's or function definition's parameters will
+# either all be on the same line or will have one line each.
+BinPackArguments: true
+BreakConstructorInitializersBeforeComma: false
+# The maximum number of consecutive empty lines to keep.
+MaxEmptyLinesToKeep: 1
