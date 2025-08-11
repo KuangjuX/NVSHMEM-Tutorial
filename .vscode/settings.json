@@ -31,6 +31,10 @@
         "string_view": "cpp",
         "typeinfo": "cpp",
         "vector": "cpp",
-        "cwchar": "cpp"
+        "cwchar": "cpp",
+        "__hash_table": "cpp",
+        "deque": "cpp",
+        "forward_list": "cpp",
+        "unordered_map": "cpp"
     }
 }

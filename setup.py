@@ -47,6 +47,7 @@ setup(
             name="_nvshmem_pybind_cpp",
             sources=[
                 "csrc/put.cu",
+                "csrc/buffer.cu",
                 "csrc/pybind.cpp",
             ],
             include_dirs=include_dirs,
@@ -83,9 +84,9 @@ setup(
     install_requires=[
         "torch",
     ],
-    extras_require={
-        "dev": [
-            "ring-flash-attn",
-        ],
-    },
+    # extras_require={
+    #     "dev": [
+    #         "ring-flash-attn",
+    #     ],
+    # },
 )

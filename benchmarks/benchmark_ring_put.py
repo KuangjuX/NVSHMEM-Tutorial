@@ -50,6 +50,9 @@ def benchmark_put_bandwidth(rank, world_size, size_bytes=1024*1024*128, n_warmup
             print("This benchmark requires at least 2 processes. Skipping.")
         return
     
+    if rank == 0:
+        print(f"NVSHMEM_DISABLE_P2P: {os.environ.get('NVSHMEM_DISABLE_P2P')}")
+
     sbyte_tensor = nvshmem_ops.alloc_symmetric(size_bytes)
     rbyte_tensor = nvshmem_ops.alloc_symmetric(size_bytes)
 

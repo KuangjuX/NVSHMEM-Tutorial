@@ -1,0 +1,3 @@
+[submodule "3rd-party/DeepEP"]
+	path = 3rd-party/DeepEP
+	url = git@github.com:deepseek-ai/DeepEP.git

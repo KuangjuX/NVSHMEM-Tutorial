@@ -55,7 +55,9 @@ def benchmark_put_bandwidth(rank, world_size, size_bytes=1024*1024*128, n_warmup
 
     # Allocate a symmetric buffer on all PEs
     # This buffer can be a source for puts and a destination for gets from other PEs
-    symmetric_buffer = nvshmem_ops.alloc_symmetric(size_bytes)
+    # symmetric_buffer = nvshmem_ops.alloc_symmetric(size_bytes)
+    buffer = nvshmem_ops.Buffer(size_bytes)
+    symmetric_buffer = buffer.alloc_symmetric(size_bytes)
     
     # Rank 0 will send, Rank 1 will receive
     src_pe = 0
