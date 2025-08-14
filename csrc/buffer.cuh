@@ -21,8 +21,10 @@ class Buffer {
 
   ~Buffer();
 
-  // NVSHMEM symmetric memory helpers
+  // Allocate Symmetric Memory.
   torch::Tensor alloc_symmetric(int64_t size_bytes);
+
+  // Free Symmetric Memory.
   void free_symmetric(torch::Tensor t);
 
   // DeepEP-like: export NVSHMEM unique id (only on rdma root, i.e., rank %
@@ -38,17 +40,31 @@ class Buffer {
 
   // Intra-node (NVLink) helpers
   py::bytearray get_local_ipc_handle() const;
+
   void open_ipc_handles(
       const std::vector<std::optional<py::bytearray>>& all_handles);
-  void intranode_memcpy_to(int dst_local_pe, int64_t dst_offset_bytes,
-                           torch::Tensor src);
+
+  // void intranode_memcpy_to(int dst_local_pe, int64_t dst_offset_bytes,
+  //                          torch::Tensor src);
+
   torch::Tensor get_local_buffer_u8() const;
+
+  // Intra-node communication methods
+
+  void intranode_all_to_all(torch::Tensor input, torch::Tensor output,
+                            torch::Tensor input_split_sizes,
+                            torch::Tensor output_split_sizes);
 
   // Inter-node (NVSHMEM) helpers
   void internode_put(torch::Tensor dst_symmetric, torch::Tensor src,
                      int dst_pe);
+
   void internode_get(torch::Tensor dst, torch::Tensor src_symmetric,
                      int src_pe);
+
+  void internode_all_to_all(torch::Tensor input, torch::Tensor output,
+                            torch::Tensor input_split_sizes,
+                            torch::Tensor output_split_sizes);
 
   // DeepEP-like: view buffers as typed tensor
   torch::Tensor get_local_buffer_tensor(const py::object& dtype, int64_t offset,
@@ -61,7 +77,7 @@ class Buffer {
   bool is_available() const { return available_; }
   int get_local_pe() const;           // NVSHMEMX_TEAM_NODE local PE index
   int get_num_local_pes() const;      // NVSHMEMX_TEAM_NODE size
-  int get_device_id() const;          // CUDA device id
+  int get_local_device_id() const;    // CUDA device id
   int64_t get_num_nvl_bytes() const;  // NVLink buffer bytes
 
  private:

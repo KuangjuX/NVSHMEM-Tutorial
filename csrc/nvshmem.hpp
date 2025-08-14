@@ -10,11 +10,10 @@
 
 namespace py = pybind11;
 
-// ===================================================================
-// Part 1: Manual Bootstrap for NVSHMEM with torchrun
-// ===================================================================
-
-// 获取 unique id，返回 vector<int8_t>
+/**
+ * Get the unique id of the current process.
+ * @return The unique id of the current process.
+ */
 inline std::vector<int8_t> get_unique_id() {
   nvshmemx_uniqueid_t unique_id;
   nvshmemx_get_uniqueid(&unique_id);
@@ -24,7 +23,12 @@ inline std::vector<int8_t> get_unique_id() {
   return std::vector<int8_t>(id_ptr, id_ptr + sizeof(unique_id));
 }
 
-// 用 unique id 初始化
+/**
+ * Initialize NVSHMEM with the unique id of the current process.
+ * @param unique_id_vec The unique id of the current process.
+ * @param rank The rank of the current process.
+ * @param num_ranks The number of ranks in the current process group.
+ */
 inline void init_with_unique_id(const std::vector<int8_t>& unique_id_vec,
                                 int rank, int num_ranks) {
   if (unique_id_vec.size() != sizeof(nvshmemx_uniqueid_t)) {

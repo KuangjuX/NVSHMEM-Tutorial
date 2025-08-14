@@ -36,5 +36,11 @@
         "deque": "cpp",
         "forward_list": "cpp",
         "unordered_map": "cpp"
-    }
+    },
+
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true
+      }
+    
 }

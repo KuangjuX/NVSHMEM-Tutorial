@@ -22,7 +22,11 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
   num_rdma_ranks_ = std::max(1, num_ranks / NUM_MAX_NVL_PEERS);
   num_nvl_ranks_ = std::min(num_ranks, NUM_MAX_NVL_PEERS);
 
+  // Get ranks
+  CUDA_CHECK(cudaGetDevice(&device_id_));
+
   if (num_nvl_bytes_ > 0) {
+    // Local IPC: alloc local memory and set local IPC handles.
     CUDA_CHECK(cudaMalloc(&buffer_ptrs_[nvl_rank_], num_nvl_bytes_));
     local_allocated_ = true;
     CUDA_CHECK(
@@ -149,22 +153,23 @@ void Buffer::open_ipc_handles(
   }
 }
 
-void Buffer::intranode_memcpy_to(int dst_local_pe, int64_t dst_offset_bytes,
-                                 torch::Tensor src) {
-  if (dst_local_pe < 0 || dst_local_pe >= num_local_pes_) {
-    throw std::runtime_error("dst_local_pe out of range");
-  }
-  if (buffer_ptrs_[dst_local_pe] == nullptr) {
-    throw std::runtime_error("Destination peer buffer not mapped");
-  }
-  if (!src.is_cuda()) {
-    throw std::runtime_error("src must be CUDA tensor");
-  }
-  int64_t nbytes = src.nbytes();
-  void* dst =
-      static_cast<uint8_t*>(buffer_ptrs_[dst_local_pe]) + dst_offset_bytes;
-  CUDA_CHECK(cudaMemcpy(dst, src.data_ptr(), nbytes, cudaMemcpyDeviceToDevice));
-}
+// void Buffer::intranode_memcpy_to(int dst_local_pe, int64_t dst_offset_bytes,
+//                                  torch::Tensor src) {
+//   if (dst_local_pe < 0 || dst_local_pe >= num_local_pes_) {
+//     throw std::runtime_error("dst_local_pe out of range");
+//   }
+//   if (buffer_ptrs_[dst_local_pe] == nullptr) {
+//     throw std::runtime_error("Destination peer buffer not mapped");
+//   }
+//   if (!src.is_cuda()) {
+//     throw std::runtime_error("src must be CUDA tensor");
+//   }
+//   int64_t nbytes = src.nbytes();
+//   void* dst =
+//       static_cast<uint8_t*>(buffer_ptrs_[dst_local_pe]) + dst_offset_bytes;
+//   CUDA_CHECK(cudaMemcpy(dst, src.data_ptr(), nbytes,
+//   cudaMemcpyDeviceToDevice));
+// }
 
 torch::Tensor Buffer::get_local_buffer_u8() const {
   if (!local_allocated_ || num_nvl_bytes_ == 0) {
@@ -173,6 +178,12 @@ torch::Tensor Buffer::get_local_buffer_u8() const {
   return torch::from_blob(buffer_ptrs_[nvl_rank_], {num_nvl_bytes_},
                           torch::dtype(torch::kUInt8).device(torch::kCUDA));
 }
+
+// intranode communication kernel
+
+void Buffer::intranode_all_to_all(torch::Tensor input, torch::Tensor output,
+                                  torch::Tensor input_split_sizes,
+                                  torch::Tensor output_split_sizes) {}
 
 void Buffer::internode_put(torch::Tensor dst_symmetric, torch::Tensor src,
                            int dst_pe) {
@@ -193,6 +204,10 @@ void Buffer::internode_get(torch::Tensor dst, torch::Tensor src_symmetric,
                  src_pe);
   nvshmem_quiet();
 }
+
+void Buffer::internode_all_to_all(torch::Tensor input, torch::Tensor output,
+                                  torch::Tensor input_split_sizes,
+                                  torch::Tensor output_split_sizes) {}
 
 torch::Tensor Buffer::get_local_buffer_tensor(const py::object& dtype,
                                               int64_t offset,
@@ -234,5 +249,5 @@ void Buffer::destroy() {
 
 int Buffer::get_local_pe() const { return local_pe_; }
 int Buffer::get_num_local_pes() const { return num_local_pes_; }
-int Buffer::get_device_id() const { return device_id_; }
+int Buffer::get_local_device_id() const { return device_id_; }
 int64_t Buffer::get_num_nvl_bytes() const { return num_nvl_bytes_; }
