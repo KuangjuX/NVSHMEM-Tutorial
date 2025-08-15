@@ -2,6 +2,7 @@
 
 #include "utils.hpp"
 
+#include <ATen/cuda/CUDAContext.h>
 #include <cuda_runtime.h>
 #include <pybind11/pybind11.h>
 #include <torch/extension.h>
@@ -80,6 +81,8 @@ class Buffer {
   int get_local_device_id() const;    // CUDA device id
   int64_t get_num_nvl_bytes() const;  // NVLink buffer bytes
 
+  int get_num_device_sms() const;
+
  private:
   // Topology
   int rank_{0};
@@ -93,10 +96,12 @@ class Buffer {
   int device_id_{-1};
   int local_pe_{0};
   int num_local_pes_{1};
+  int num_device_sms_{1};
 
   // NVLink local buffers and IPC
   int64_t num_nvl_bytes_{0};
   void* buffer_ptrs_[NUM_MAX_NVL_PEERS] = {nullptr};
+  void** buffer_ptrs_gpu_{nullptr};
   cudaIpcMemHandle_t ipc_handles_[NUM_MAX_NVL_PEERS]{};
 
   // NVSHMEM RDMA buffer
@@ -105,4 +110,6 @@ class Buffer {
 
   bool local_allocated_{false};
   bool available_{false};
+
+  at::cuda::CUDAStream comm_stream_;
 };

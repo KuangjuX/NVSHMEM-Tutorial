@@ -5,6 +5,8 @@ import _nvshmem_pybind_cpp as nvshmem_runtime  # The name comes from setup.py
 
 
 class NvshmemBuffer:
+    """Buffer class for NVSHMEM communication."""
+
     def __init__(
         self,
         group: dist.ProcessGroup,
@@ -13,6 +15,7 @@ class NvshmemBuffer:
         num_nvl_bytes: int,
         num_rdma_bytes: int,
     ):
+        """Initialize the NVSHMEM buffer."""
         os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "none"
 
         self.group = group
@@ -51,3 +54,24 @@ class NvshmemBuffer:
 
     def __del__(self):
         pass
+
+    def get_num_device_sms(self):
+        """Get the number of SMs on the device."""
+        return self.runtime.get_num_device_sms()
+
+    def intranode_all_to_all(
+        self, input_tensor, output_tensor, input_split_sizes, output_split_sizes
+    ):
+        """Perform intra-node all-to-all communication using NVLink and CUDA IPC."""
+        if not input_tensor.is_cuda() or not output_tensor.is_cuda():
+            raise ValueError("Input and output must be CUDA tensors")
+        if not input_split_sizes.is_cuda() or not output_split_sizes.is_cuda():
+            raise ValueError("Split sizes must be CUDA tensors")
+        if (
+            input_split_sizes.numel() != self.group_size
+            or output_split_sizes.numel() != self.group_size
+        ):
+            raise ValueError("Split sizes must match group size")
+        self.runtime.intranode_all_to_all(
+            input_tensor, output_tensor, input_split_sizes, output_split_sizes
+        )

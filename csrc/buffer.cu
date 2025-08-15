@@ -1,6 +1,10 @@
 #include "buffer.cuh"
+#include "internode.cuh"
+#include "intranode.cuh"
 
 #include <cstring>
+
+using namespace nvshmem_tutorial;
 
 // Helper to get NVSHMEM local pe info
 static inline void query_local_pe(int& local_pe, int& num_local_pes) {
@@ -13,7 +17,8 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
     : rank_{rank},
       num_ranks_{num_ranks},
       num_nvl_bytes_{num_nvl_bytes},
-      num_rdma_bytes_{num_rdma_bytes} {
+      num_rdma_bytes_{num_rdma_bytes},
+      comm_stream_(at::cuda::getStreamFromPool(true)) {
   CUDA_CHECK(cudaGetDevice(&device_id_));
   query_local_pe(local_pe_, num_local_pes_);
 
@@ -25,12 +30,19 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
   // Get ranks
   CUDA_CHECK(cudaGetDevice(&device_id_));
 
+  // Get device info
+  cudaDeviceProp device_prop = {};
+  CUDA_CHECK(cudaGetDeviceProperties(&device_prop, device_id_));
+  num_device_sms_ = device_prop.multiProcessorCount;
+
   if (num_nvl_bytes_ > 0) {
     // Local IPC: alloc local memory and set local IPC handles.
     CUDA_CHECK(cudaMalloc(&buffer_ptrs_[nvl_rank_], num_nvl_bytes_));
     local_allocated_ = true;
     CUDA_CHECK(
         cudaIpcGetMemHandle(&ipc_handles_[nvl_rank_], buffer_ptrs_[nvl_rank_]));
+    buffer_ptrs_gpu_ = reinterpret_cast<void**>(
+        static_cast<uint8_t*>(buffer_ptrs_[nvl_rank_]));
   }
 }
 
@@ -183,7 +195,27 @@ torch::Tensor Buffer::get_local_buffer_u8() const {
 
 void Buffer::intranode_all_to_all(torch::Tensor input, torch::Tensor output,
                                   torch::Tensor input_split_sizes,
-                                  torch::Tensor output_split_sizes) {}
+                                  torch::Tensor output_split_sizes) {
+  if (!input.is_cuda() || !output.is_cuda()) {
+    throw std::runtime_error("intranode_all_to_all expects CUDA tensors");
+  }
+  if (!input_split_sizes.is_cuda() || !output_split_sizes.is_cuda()) {
+    throw std::runtime_error("split_sizes must be CUDA tensors");
+  }
+  if (input_split_sizes.numel() != num_local_pes_ ||
+      output_split_sizes.numel() != num_local_pes_) {
+    throw std::runtime_error("split_sizes length must match num_local_pes");
+  }
+
+  // Launch CUDA kernel for intranode all-to-all communication
+  intranode::launch_intranode_all_to_all(
+      input.data_ptr(), output.data_ptr(),
+      input_split_sizes.data_ptr<int64_t>(),
+      output_split_sizes.data_ptr<int64_t>(), buffer_ptrs_gpu_, local_pe_,
+      num_local_pes_, num_device_sms_, comm_stream_);
+
+  comm_stream_.synchronize();
+}
 
 void Buffer::internode_put(torch::Tensor dst_symmetric, torch::Tensor src,
                            int dst_pe) {
@@ -251,3 +283,4 @@ int Buffer::get_local_pe() const { return local_pe_; }
 int Buffer::get_num_local_pes() const { return num_local_pes_; }
 int Buffer::get_local_device_id() const { return device_id_; }
 int64_t Buffer::get_num_nvl_bytes() const { return num_nvl_bytes_; }
+int Buffer::get_num_device_sms() const { return num_device_sms_; }
