@@ -7,16 +7,14 @@ namespace nvshmem_tutorial::intranode {
 
 template <typename Element>
 __global__ void ke_intranode_all_to_all(
-    Element** peer_buffer_ptrs,  // Array of pointers to each peer's buffer -
-                                 // 通过CUDA IPC映射的各个peer的内存指针
-    Element* input_data,         // Local input data
-    Element* output_data,        // Local output data
-    int* input_split_sizes,      // Size of data to send to each peer
-    int* output_split_sizes,     // Size of data to receive from each peer
-    int* input_offsets,          // Offset in input for each peer's data
-    int* output_offsets,         // Offset in output for each peer's data
-    int num_peers,               // Number of peers in the node
-    int local_rank               // Local rank within the node
+    void** peer_buffer_ptrs,  // Array of pointers to each peer's buffer -
+                              // 通过CUDA IPC映射的各个peer的内存指针
+    Element* input_data,      // Local input data
+    Element* output_data,     // Local output data
+    int* input_split_sizes,   // Size of data to send to each peer
+    int* output_split_sizes,  // Size of data to receive from each peer
+    int num_peers,            // Number of peers in the node
+    int local_rank            // Local rank within the node
 ) {
   // peer_buffer_ptrs的作用：
   // 1. 这是一个指针数组，每个元素指向一个peer的GPU内存缓冲区
@@ -33,50 +31,68 @@ __global__ void ke_intranode_all_to_all(
 
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
+  // 计算输入偏移量（类似PyTorch内部实现）
+  int input_offset = 0;
+  int output_offset = 0;
+
   // 第一阶段：将数据写入目标peer的缓冲区
   for (int peer = 0; peer < num_peers; ++peer) {
     int send_size = input_split_sizes[peer];
     if (send_size > 0) {
-      Element* src = input_data + input_offsets[peer];
+      Element* src = input_data + input_offset;
 
       if (peer == local_rank) {
         // 本地拷贝：直接从input拷贝到output
-        Element* dst = output_data + output_offsets[local_rank];
+        // 需要计算output中local_rank的偏移位置
+        int local_output_offset = 0;
+        for (int i = 0; i < local_rank; ++i) {
+          local_output_offset += output_split_sizes[i];
+        }
+        Element* dst = output_data + local_output_offset;
         for (int i = tid; i < send_size; i += blockDim.x * gridDim.x) {
           dst[i] = src[i];
         }
       } else {
         // 远程写入：通过IPC直接写入peer的GPU内存
-        // peer_buffer_ptrs[peer] 指向目标peer的缓冲区起始地址
         Element* peer_buffer = peer_buffer_ptrs[peer];
-        // 计算在peer缓冲区中的写入位置，使用local_rank作为偏移避免冲突
-        Element* dst = peer_buffer + output_offsets[local_rank];
+        // 计算在peer缓冲区中local_rank应该写入的位置
+        int peer_output_offset = 0;
+        for (int i = 0; i < local_rank; ++i) {
+          peer_output_offset += output_split_sizes[i];
+        }
+        Element* dst = peer_buffer + peer_output_offset;
 
         for (int i = tid; i < send_size; i += blockDim.x * gridDim.x) {
           dst[i] = src[i];
         }
       }
     }
+    input_offset += send_size;
   }
 
   // 确保所有写入操作完成
   __syncthreads();
 
   // 第二阶段：从各个peer的缓冲区读取数据
+  output_offset = 0;
   for (int peer = 0; peer < num_peers; ++peer) {
-    if (peer != local_rank) {  // 本地数据已在第一阶段处理
-      int recv_size = output_split_sizes[peer];
-      if (recv_size > 0) {
-        // 通过IPC直接从peer的GPU内存读取数据
-        Element* peer_buffer = peer_buffer_ptrs[peer];
-        Element* src = peer_buffer + output_offsets[peer];
-        Element* dst = output_data + output_offsets[peer];
+    int recv_size = output_split_sizes[peer];
+    if (recv_size > 0 && peer != local_rank) {  // 本地数据已在第一阶段处理
+      // 通过IPC直接从peer的GPU内存读取数据
+      Element* peer_buffer = reinterpret_cast<Element*>(peer_buffer_ptrs[peer]);
+      // 计算从peer缓冲区中读取的起始位置
+      int peer_output_offset = 0;
+      for (int i = 0; i < peer; ++i) {
+        peer_output_offset += output_split_sizes[i];
+      }
+      Element* src = peer_buffer + peer_output_offset;
+      Element* dst = output_data + output_offset;
 
-        for (int i = tid; i < recv_size; i += blockDim.x * gridDim.x) {
-          dst[i] = src[i];
-        }
+      for (int i = tid; i < recv_size; i += blockDim.x * gridDim.x) {
+        dst[i] = src[i];
       }
     }
+    output_offset += recv_size;
   }
 }
 
@@ -92,9 +108,10 @@ void launch_intranode_all_to_all(Element* input_data, Element* output_data,
   const int grid_size = num_sms;
 
   // 启动CUDA kernel
-  // ke_intranode_all_to_all<<<grid_size, block_size, 0, stream>>>(
-  //     input_data, output_data, input_split_sizes, output_split_sizes,
-  //     reinterpret_cast<Element**>(peer_buffer_ptrs), local_rank, num_peers);
+  ke_intranode_all_to_all<<<grid_size, block_size, 0, stream>>>(
+      peer_buffer_ptrs, input_data, output_data,
+      reinterpret_cast<int*>(input_split_sizes),
+      reinterpret_cast<int*>(output_split_sizes), num_peers, local_rank);
 
   // 检查kernel启动错误
   CUDA_CHECK(cudaGetLastError());
