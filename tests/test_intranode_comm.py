@@ -10,19 +10,16 @@ from nvshmem_tutorial import NvshmemBuffer
 import torch.distributed as dist
 
 
-def test_intranode_all_to_all(buffer: NvshmemBuffer):
-    input_tensor = torch.randn(1024 * 1024 * 128, dtype=torch.float32, device="cuda")
-    output_tensor = torch.zeros(1024 * 1024 * 128, dtype=torch.float32, device="cuda")
-    input_split_sizes = torch.randint(
-        1, 1024 * 1024 * 128, (buffer.group_size,), dtype=torch.int32, device="cuda"
-    )
-    output_split_sizes = torch.randint(
-        1, 1024 * 1024 * 128, (buffer.group_size,), dtype=torch.int32, device="cuda"
-    )
-    buffer.intranode_all_to_all(
-        input_tensor, output_tensor, input_split_sizes, output_split_sizes
-    )
-    torch.testing.assert_close(input_tensor, output_tensor)
+def test_all_gather(buffer: NvshmemBuffer):
+    tensor = torch.randn(1024, dtype=torch.float32, device="cuda")
+    tensor_list = [torch.zeros_like(tensor) for _ in range(buffer.group_size)]
+    buffer.intranode_all_gather(tensor_list, tensor, async_op=True)
+
+    ref_tensor_list = [torch.zeros_like(tensor) for _ in range(buffer.group_size)]
+    dist.all_gather(ref_tensor_list, tensor, group=dist.group.WORLD)
+
+    for i in range(buffer.group_size):
+        torch.testing.assert_close(tensor_list[i], ref_tensor_list[i])
 
 
 if __name__ == "__main__":
@@ -43,5 +40,7 @@ if __name__ == "__main__":
 
     if rank == 0:
         print(f"Number of SMs on device: {buffer.get_num_device_sms()}")
+
+    test_all_gather(buffer)
 
     dist.destroy_process_group()

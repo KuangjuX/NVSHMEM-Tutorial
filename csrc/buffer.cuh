@@ -52,6 +52,9 @@ class Buffer {
 
   // Intra-node communication methods
 
+  void intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
+                            const torch::Tensor& tensor, bool async_op);
+
   void intranode_all_to_all(torch::Tensor input, torch::Tensor output,
                             torch::Tensor input_split_sizes,
                             torch::Tensor output_split_sizes);
@@ -98,10 +101,16 @@ class Buffer {
   int num_local_pes_{1};
   int num_device_sms_{1};
 
-  // NVLink local buffers and IPC
+  // NVLink local buffers
   int64_t num_nvl_bytes_{0};
   void* buffer_ptrs_[NUM_MAX_NVL_PEERS] = {nullptr};
   void** buffer_ptrs_gpu_{nullptr};
+
+  // Barrier signals
+  int* barrier_signal_ptrs_[NUM_MAX_NVL_PEERS] = {nullptr};
+  int** barrier_signal_ptrs_gpu_{nullptr};
+
+  // IPC handles
   cudaIpcMemHandle_t ipc_handles_[NUM_MAX_NVL_PEERS]{};
 
   // NVSHMEM RDMA buffer

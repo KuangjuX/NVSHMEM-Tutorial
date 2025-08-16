@@ -1,6 +1,7 @@
 #include "buffer.cuh"
 #include "internode.cuh"
 #include "intranode.cuh"
+#include "sync.cuh"
 
 #include <cstring>
 
@@ -27,6 +28,10 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
   num_rdma_ranks_ = std::max(1, num_ranks / NUM_MAX_NVL_PEERS);
   num_nvl_ranks_ = std::min(num_ranks, NUM_MAX_NVL_PEERS);
 
+  int64_t barrier_signal_bytes = NUM_MAX_NVL_PEERS * sizeof(int);
+  int64_t buffer_ptr_bytes = NUM_MAX_NVL_PEERS * sizeof(void*);
+  int64_t barrier_signal_ptr_bytes = NUM_MAX_NVL_PEERS * sizeof(int*);
+
   // Get ranks
   CUDA_CHECK(cudaGetDevice(&device_id_));
 
@@ -37,12 +42,25 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
 
   if (num_nvl_bytes_ > 0) {
     // Local IPC: alloc local memory and set local IPC handles.
-    CUDA_CHECK(cudaMalloc(&buffer_ptrs_[nvl_rank_], num_nvl_bytes_));
+    CUDA_CHECK(cudaMalloc(
+        &buffer_ptrs_[nvl_rank_],
+        num_nvl_bytes_ + barrier_signal_bytes + barrier_signal_ptr_bytes));
     local_allocated_ = true;
     CUDA_CHECK(
         cudaIpcGetMemHandle(&ipc_handles_[nvl_rank_], buffer_ptrs_[nvl_rank_]));
     buffer_ptrs_gpu_ = reinterpret_cast<void**>(
         static_cast<uint8_t*>(buffer_ptrs_[nvl_rank_]));
+
+    // Set barrier signals
+    barrier_signal_ptrs_[nvl_rank_] = reinterpret_cast<int*>(
+        static_cast<uint8_t*>(buffer_ptrs_[nvl_rank_]) + num_nvl_bytes_);
+    barrier_signal_ptrs_gpu_ =
+        reinterpret_cast<int**>(static_cast<uint8_t*>(buffer_ptrs_[nvl_rank_]) +
+                                num_nvl_bytes_ + barrier_signal_bytes);
+
+    CUDA_CHECK(cudaMemsetAsync(barrier_signal_ptrs_[nvl_rank_], 0,
+                               barrier_signal_bytes, comm_stream_));
+    comm_stream_.synchronize();
   }
 }
 
@@ -165,24 +183,6 @@ void Buffer::open_ipc_handles(
   }
 }
 
-// void Buffer::intranode_memcpy_to(int dst_local_pe, int64_t dst_offset_bytes,
-//                                  torch::Tensor src) {
-//   if (dst_local_pe < 0 || dst_local_pe >= num_local_pes_) {
-//     throw std::runtime_error("dst_local_pe out of range");
-//   }
-//   if (buffer_ptrs_[dst_local_pe] == nullptr) {
-//     throw std::runtime_error("Destination peer buffer not mapped");
-//   }
-//   if (!src.is_cuda()) {
-//     throw std::runtime_error("src must be CUDA tensor");
-//   }
-//   int64_t nbytes = src.nbytes();
-//   void* dst =
-//       static_cast<uint8_t*>(buffer_ptrs_[dst_local_pe]) + dst_offset_bytes;
-//   CUDA_CHECK(cudaMemcpy(dst, src.data_ptr(), nbytes,
-//   cudaMemcpyDeviceToDevice));
-// }
-
 torch::Tensor Buffer::get_local_buffer_u8() const {
   if (!local_allocated_ || num_nvl_bytes_ == 0) {
     throw std::runtime_error("No local NVLink buffer allocated");
@@ -192,6 +192,44 @@ torch::Tensor Buffer::get_local_buffer_u8() const {
 }
 
 // intranode communication kernel
+
+void Buffer::intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
+                                  const torch::Tensor& tensor, bool async_op) {
+  if (!tensor.is_cuda()) {
+    throw std::runtime_error("intranode_all_gather expects CUDA tensor");
+  }
+
+  if (static_cast<int>(tensor_list.size()) != num_nvl_ranks_) {
+    throw std::runtime_error("tensor_list size must match num_nvl_ranks");
+  }
+
+  int64_t num_bytes = tensor.nbytes();
+
+  if (buffer_ptrs_[nvl_rank_] == nullptr) {
+    throw std::runtime_error("Local NVLink buffer not allocated");
+  }
+
+  // Copy tensor to local NVLink buffer
+  CUDA_CHECK(cudaMemcpyAsync(buffer_ptrs_[nvl_rank_], tensor.data_ptr(),
+                             num_bytes, cudaMemcpyDeviceToDevice,
+                             comm_stream_));
+
+  sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_, comm_stream_);
+
+  for (int pe = 0; pe < num_nvl_ranks_; ++pe) {
+    if (buffer_ptrs_[pe] == nullptr) {
+      throw std::runtime_error("buffer_ptrs_[pe] is nullptr");
+    }
+
+    CUDA_CHECK(cudaMemcpyAsync(tensor_list[pe].data_ptr(), buffer_ptrs_[pe],
+                               num_bytes, cudaMemcpyDeviceToDevice,
+                               comm_stream_));
+  }
+
+  if (!async_op) {
+    cudaStreamSynchronize(comm_stream_);
+  }
+}
 
 void Buffer::intranode_all_to_all(torch::Tensor input, torch::Tensor output,
                                   torch::Tensor input_split_sizes,
@@ -208,11 +246,11 @@ void Buffer::intranode_all_to_all(torch::Tensor input, torch::Tensor output,
   }
 
   // Launch CUDA kernel for intranode all-to-all communication
-  intranode::launch_intranode_all_to_all(
-      input.data_ptr(), output.data_ptr(),
-      input_split_sizes.data_ptr<int64_t>(),
-      output_split_sizes.data_ptr<int64_t>(), buffer_ptrs_gpu_, local_pe_,
-      num_local_pes_, num_device_sms_, comm_stream_);
+  // intranode::launch_intranode_all_to_all(
+  //     input.data_ptr(), output.data_ptr(),
+  //     input_split_sizes.data_ptr<int64_t>(),
+  //     output_split_sizes.data_ptr<int64_t>(), buffer_ptrs_gpu_, local_pe_,
+  //     num_local_pes_, num_device_sms_, comm_stream_);
 
   comm_stream_.synchronize();
 }

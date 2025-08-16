@@ -26,6 +26,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("internode_put", &Buffer::internode_put)
       .def("internode_get", &Buffer::internode_get)
       // Intranode communication
+      .def("intranode_all_gather", &Buffer::intranode_all_gather)
       .def("intranode_all_to_all", &Buffer::intranode_all_to_all)
       .def("destroy", &Buffer::destroy)
       // Introspection

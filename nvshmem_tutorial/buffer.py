@@ -59,6 +59,14 @@ class NvshmemBuffer:
         """Get the number of SMs on the device."""
         return self.runtime.get_num_device_sms()
 
+    def intranode_all_gather(self, tensor_list, tensor, async_op=False):
+        """Perform intra-node all-gather communication using NVLink and CUDA IPC."""
+        if not tensor.is_cuda:
+            raise ValueError("Tensor must be CUDA tensor")
+        if len(tensor_list) != self.group_size:
+            raise ValueError("Tensor list must match group size")
+        self.runtime.intranode_all_gather(tensor_list, tensor, async_op)
+
     def intranode_all_to_all(
         self, input_tensor, output_tensor, input_split_sizes, output_split_sizes
     ):
