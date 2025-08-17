@@ -51,28 +51,13 @@ __global__ void barrier(int** barrier_signal_ptrs, int rank) {
 
 void barrier(int** barrier_signal_ptrs, int rank, int num_ranks,
              cudaStream_t stream) {
-  // #define BARRIER_LAUNCH_CASE(ranks)                                \
-//   LAUNCH_KERNEL(&cfg, barrier<ranks>, barrier_signal_ptrs, rank); \
-//   break
+#define BARRIER_LAUNCH_CASE(ranks)                                \
+  LAUNCH_KERNEL(&cfg, barrier<ranks>, barrier_signal_ptrs, rank); \
+  break
 
-  //   SETUP_LAUNCH_CONFIG(1, 32, stream);
-  //   SWITCH_RANKS(BARRIER_LAUNCH_CASE);
-  // #undef BARRIER_LAUNCH_CASE
-
-  switch (num_ranks) {
-    case 2:
-      barrier<2><<<1, 32, 0, stream>>>(barrier_signal_ptrs, rank);
-      break;
-    case 4:
-      barrier<4><<<1, 32, 0, stream>>>(barrier_signal_ptrs, rank);
-      break;
-    case 8:
-      barrier<8><<<1, 32, 0, stream>>>(barrier_signal_ptrs, rank);
-      break;
-    default:
-      std::cerr << "Unsupported number of ranks: " << num_ranks << std::endl;
-      throw std::runtime_error("Unsupported number of ranks");
-  }
+  SETUP_LAUNCH_CONFIG(1, 32, stream);
+  SWITCH_RANKS(BARRIER_LAUNCH_CASE);
+#undef BARRIER_LAUNCH_CASE
 }
 
 }  // namespace nvshmem_tutorial::sync
