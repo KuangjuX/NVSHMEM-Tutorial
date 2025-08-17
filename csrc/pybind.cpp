@@ -7,10 +7,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-// ===================================================================
-// Part 3: Pybind11 Module Definition
-// ===================================================================
-
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.doc() = "NVSHMEM bindings for benchmarking with torchrun";
 
@@ -22,20 +18,21 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def(py::init<int, int, int64_t, int64_t>())
       .def("alloc_symmetric", &Buffer::alloc_symmetric)
       .def("free_symmetric", &Buffer::free_symmetric)
-      // .def("get_local_nvshmem_unique_id",
-      // &Buffer::get_local_nvshmem_unique_id) .def("sync", &Buffer::sync)
       .def("get_local_ipc_handle", &Buffer::get_local_ipc_handle)
       .def("open_ipc_handles", &Buffer::open_ipc_handles)
-      .def("intranode_memcpy_to", &Buffer::intranode_memcpy_to)
       .def("get_local_buffer_u8", &Buffer::get_local_buffer_u8)
-      .def("internode_put", &Buffer::internode_put)
-      .def("internode_get", &Buffer::internode_get)
-      .def("get_local_buffer_tensor", &Buffer::get_local_buffer_tensor)
+      .def("sync", &Buffer::sync)
+      // Intranode communication
+      .def("intranode_all_gather", &Buffer::intranode_all_gather)
+      .def("intranode_all_to_all", &Buffer::intranode_all_to_all)
       .def("destroy", &Buffer::destroy)
+      // Introspection
       .def("is_available", &Buffer::is_available)
+      .def("get_local_buffer_tensor", &Buffer::get_local_buffer_tensor)
       .def("get_local_pe", &Buffer::get_local_pe)
+      .def("get_local_device_id", &Buffer::get_local_device_id)
+      .def("get_num_device_sms", &Buffer::get_num_device_sms)
       .def("get_num_local_pes", &Buffer::get_num_local_pes)
-      .def("get_device_id", &Buffer::get_device_id)
       .def("get_num_nvl_bytes", &Buffer::get_num_nvl_bytes);
 
   // Bootstrap functions

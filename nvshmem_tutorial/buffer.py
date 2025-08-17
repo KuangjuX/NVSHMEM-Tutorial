@@ -1,26 +1,89 @@
 import os
+import torch
 import torch.distributed as dist
-import _nvshmem_pybind_cpp as nvshmem_ops # The name comes from setup.py
+import _nvshmem_tutorial as nvshmem_runtime  # The name comes from setup.py
+
 
 class NvshmemBuffer:
-    def __init__(self, group: dist.ProcessGroup, rank: int, num_ranks: int, num_nvl_bytes: int, num_rdma_bytes: int):
+    """Buffer class for NVSHMEM communication."""
+
+    def __init__(
+        self,
+        group: dist.ProcessGroup,
+        rank: int,
+        num_ranks: int,
+        num_nvl_bytes: int,
+        num_rdma_bytes: int,
+    ):
+        """Initialize the NVSHMEM buffer."""
         os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "none"
-        
+
+        self.group = group
+        self.group_size = group.size()
+        self.rank = rank
+        self.num_ranks = num_ranks
+        self.num_nvl_bytes = num_nvl_bytes
+        self.num_rdma_bytes = num_rdma_bytes
+
+        # Initialize nvshmem with unique id
         if rank == 0:
-            # Rank 0 创建 unique_id
-            unique_id = nvshmem_ops.get_unique_id()
+            unique_id = nvshmem_runtime.get_unique_id()
         else:
             unique_id = None
 
         unique_ids = [None] * num_ranks
-        dist.all_gather_object(unique_ids, unique_id, group = dist.group.WORLD)
+        dist.all_gather_object(unique_ids, unique_id, group=dist.group.WORLD)
+        nvshmem_runtime.init_with_unique_id(unique_ids[0], rank, num_ranks)
 
-        # 5. 使用接收到的 unique_id 初始化 NVSHMEM
-        nvshmem_ops.init_with_unique_id(unique_ids[0], rank, num_ranks)
-        
         print(f"[Rank {rank}] NVSHMEM initialized successfully.")
-        
-        # 确保所有进程都完成了初始化再继续
         dist.barrier()
 
-        self.buffer = nvshmem_ops.Buffer(rank, num_ranks, num_nvl_bytes, num_rdma_bytes)
+        self.runtime = nvshmem_runtime.Buffer(
+            rank, num_ranks, num_nvl_bytes, num_rdma_bytes
+        )
+
+        # Synchronize device IDs
+        device_ids = [None] * self.group_size
+        local_device_id = self.runtime.get_local_device_id()
+        dist.all_gather_object(device_ids, local_device_id, group)
+
+        # Synchronize IPC handles
+        ipc_handles = [None] * self.group_size
+        local_ipc_handle = self.runtime.get_local_ipc_handle()
+        dist.all_gather_object(ipc_handles, local_ipc_handle, group)
+
+        root_unique_id = None
+
+        self.runtime.sync(device_ids, ipc_handles, root_unique_id)
+
+    def __del__(self):
+        pass
+
+    def get_num_device_sms(self):
+        """Get the number of SMs on the device."""
+        return self.runtime.get_num_device_sms()
+
+    def intranode_all_gather(self, tensor_list, tensor, async_op=False):
+        """Perform intra-node all-gather communication using NVLink and CUDA IPC."""
+        if not tensor.is_cuda:
+            raise ValueError("Tensor must be CUDA tensor")
+        if len(tensor_list) != self.group_size:
+            raise ValueError("Tensor list must match group size")
+        self.runtime.intranode_all_gather(tensor_list, tensor, async_op)
+
+    def intranode_all_to_all(
+        self, input_tensor, output_tensor, input_split_sizes, output_split_sizes
+    ):
+        """Perform intra-node all-to-all communication using NVLink and CUDA IPC."""
+        if not input_tensor.is_cuda() or not output_tensor.is_cuda():
+            raise ValueError("Input and output must be CUDA tensors")
+        if not input_split_sizes.is_cuda() or not output_split_sizes.is_cuda():
+            raise ValueError("Split sizes must be CUDA tensors")
+        if (
+            input_split_sizes.numel() != self.group_size
+            or output_split_sizes.numel() != self.group_size
+        ):
+            raise ValueError("Split sizes must match group size")
+        self.runtime.intranode_all_to_all(
+            input_tensor, output_tensor, input_split_sizes, output_split_sizes
+        )
