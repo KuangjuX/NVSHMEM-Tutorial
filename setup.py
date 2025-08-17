@@ -39,12 +39,12 @@ extra_link_args = [
 ]
 
 setup(
-    name="nvshmem_pybind_cpp",
+    name="nvshmem_tutorial",
     version="0.1.0",
     packages=find_packages(exclude=["benchmarks"]),
     ext_modules=[
         CUDAExtension(
-            name="_nvshmem_pybind_cpp",
+            name="_nvshmem_tutorial",
             sources=[
                 "csrc/put.cu",
                 "csrc/buffer.cu",

@@ -34,7 +34,7 @@ __forceinline__ __device__ void barrier_block(int** barrier_signal_ptrs,
                      : 0;
     if (__all_sync(0xffffffff, value <= 0)) break;
 
-    if (clock64() - start_time > NUM_TIMEOUT_CYCLES and thread_id < kNumRanks) {
+    if (clock64() - start_time > NUM_TIMEOUT_CYCLES && thread_id < kNumRanks) {
       printf(
           "DeepEP timeout check failed: rank = %d, thread = %d, value = %d)\n",
           rank, thread_id, value);
@@ -51,13 +51,28 @@ __global__ void barrier(int** barrier_signal_ptrs, int rank) {
 
 void barrier(int** barrier_signal_ptrs, int rank, int num_ranks,
              cudaStream_t stream) {
-#define BARRIER_LAUNCH_CASE(ranks)                                \
-  LAUNCH_KERNEL(&cfg, barrier<ranks>, barrier_signal_ptrs, rank); \
-  break
+  // #define BARRIER_LAUNCH_CASE(ranks)                                \
+//   LAUNCH_KERNEL(&cfg, barrier<ranks>, barrier_signal_ptrs, rank); \
+//   break
 
-  SETUP_LAUNCH_CONFIG(1, 32, stream);
-  SWITCH_RANKS(BARRIER_LAUNCH_CASE);
-#undef BARRIER_LAUNCH_CASE
+  //   SETUP_LAUNCH_CONFIG(1, 32, stream);
+  //   SWITCH_RANKS(BARRIER_LAUNCH_CASE);
+  // #undef BARRIER_LAUNCH_CASE
+
+  switch (num_ranks) {
+    case 2:
+      barrier<2><<<1, 32, 0, stream>>>(barrier_signal_ptrs, rank);
+      break;
+    case 4:
+      barrier<4><<<1, 32, 0, stream>>>(barrier_signal_ptrs, rank);
+      break;
+    case 8:
+      barrier<8><<<1, 32, 0, stream>>>(barrier_signal_ptrs, rank);
+      break;
+    default:
+      std::cerr << "Unsupported number of ranks: " << num_ranks << std::endl;
+      throw std::runtime_error("Unsupported number of ranks");
+  }
 }
 
 }  // namespace nvshmem_tutorial::sync

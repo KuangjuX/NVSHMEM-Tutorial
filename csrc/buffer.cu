@@ -42,25 +42,31 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
 
   if (num_nvl_bytes_ > 0) {
     // Local IPC: alloc local memory and set local IPC handles.
-    CUDA_CHECK(cudaMalloc(
-        &buffer_ptrs_[nvl_rank_],
-        num_nvl_bytes_ + barrier_signal_bytes + barrier_signal_ptr_bytes));
+    /**
+     * Buffer layout:
+     * | num_nvl_bytes_ | barrier_signal_bytes | buffer_ptr_bytes |
+     * barrier_signal_ptr_bytes |
+     */
+    CUDA_CHECK(cudaMalloc(&buffer_ptrs_[nvl_rank_],
+                          num_nvl_bytes_ + barrier_signal_bytes +
+                              barrier_signal_ptr_bytes + buffer_ptr_bytes));
     local_allocated_ = true;
     CUDA_CHECK(
         cudaIpcGetMemHandle(&ipc_handles_[nvl_rank_], buffer_ptrs_[nvl_rank_]));
     buffer_ptrs_gpu_ = reinterpret_cast<void**>(
-        static_cast<uint8_t*>(buffer_ptrs_[nvl_rank_]));
+        static_cast<uint8_t*>(buffer_ptrs_[nvl_rank_]) + num_nvl_bytes_ +
+        barrier_signal_bytes);
 
     // Set barrier signals
     barrier_signal_ptrs_[nvl_rank_] = reinterpret_cast<int*>(
         static_cast<uint8_t*>(buffer_ptrs_[nvl_rank_]) + num_nvl_bytes_);
-    barrier_signal_ptrs_gpu_ =
-        reinterpret_cast<int**>(static_cast<uint8_t*>(buffer_ptrs_[nvl_rank_]) +
-                                num_nvl_bytes_ + barrier_signal_bytes);
+    barrier_signal_ptrs_gpu_ = reinterpret_cast<int**>(
+        static_cast<uint8_t*>(buffer_ptrs_[nvl_rank_]) + num_nvl_bytes_ +
+        barrier_signal_bytes + buffer_ptr_bytes);
 
+    // Do not synchronize here, will be synchronized in sync()
     CUDA_CHECK(cudaMemsetAsync(barrier_signal_ptrs_[nvl_rank_], 0,
                                barrier_signal_bytes, comm_stream_));
-    comm_stream_.synchronize();
   }
 }
 
@@ -99,57 +105,68 @@ void Buffer::free_symmetric(torch::Tensor t) { nvshmem_free(t.data_ptr()); }
 //   uid.size());
 // }
 
-// void Buffer::sync(
-//     const std::vector<int>& device_ids,
-//     const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
-//     const std::optional<py::bytearray>& root_unique_id_opt) {
-//   // Open CUDA IPC peers
-//   if (num_nvl_bytes_ > 0) {
-//     if (static_cast<int>(device_ids.size()) != num_ranks_) {
-//       throw std::runtime_error("sync: device_ids size mismatch");
-//     }
-//     if (static_cast<int>(all_gathered_handles.size()) != num_ranks_) {
-//       throw std::runtime_error("sync: handles size mismatch");
-//     }
-//     // Map only peers within our NVL group
-//     int offset = rdma_rank_ * num_nvl_ranks_;
-//     for (int i = 0; i < num_nvl_ranks_; ++i) {
-//       auto peer_rank = offset + i;
-//       auto handle_str = std::string(
-//           all_gathered_handles[peer_rank].value().cast<std::string>());
-//       if (peer_rank != rank_) {
-//         if (handle_str.size() != sizeof(cudaIpcMemHandle_t)) {
-//           throw std::runtime_error("CUDA IPC handle size mismatch");
-//         }
-//         std::memcpy(ipc_handles_[i].reserved, handle_str.data(),
-//                     sizeof(cudaIpcMemHandle_t));
-//         CUDA_CHECK(cudaIpcOpenMemHandle(&buffer_ptrs_[i], ipc_handles_[i],
-//                                         cudaIpcMemLazyEnablePeerAccess));
-//       }
-//     }
-//     CUDA_CHECK(cudaDeviceSynchronize());
-//   }
+void Buffer::sync(
+    const std::vector<int>& device_ids,
+    const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
+    const std::optional<py::bytearray>& root_unique_id_opt) {
+  // Open CUDA IPC peers
+  if (num_nvl_bytes_ > 0) {
+    if (static_cast<int>(device_ids.size()) != num_ranks_) {
+      throw std::runtime_error("sync: device_ids size mismatch");
+    }
+    if (static_cast<int>(all_gathered_handles.size()) != num_ranks_) {
+      throw std::runtime_error("sync: handles size mismatch");
+    }
+    // Map only peers within our NVL group
+    int offset = rdma_rank_ * num_nvl_ranks_;
+    for (int i = 0; i < num_nvl_ranks_; ++i) {
+      auto peer_rank = offset + i;
+      auto handle_str = std::string(
+          all_gathered_handles[peer_rank].value().cast<std::string>());
+      if (peer_rank != rank_) {
+        if (handle_str.size() != sizeof(cudaIpcMemHandle_t)) {
+          throw std::runtime_error("CUDA IPC handle size mismatch");
+        }
+        std::memcpy(ipc_handles_[i].reserved, handle_str.data(),
+                    sizeof(cudaIpcMemHandle_t));
+        CUDA_CHECK(cudaIpcOpenMemHandle(&buffer_ptrs_[i], ipc_handles_[i],
+                                        cudaIpcMemLazyEnablePeerAccess));
+        barrier_signal_ptrs_[i] = reinterpret_cast<int*>(
+            static_cast<uint8_t*>(buffer_ptrs_[i]) + num_nvl_bytes_);
+      }
+    }
+    // Copy all buffer and barrier signal pointers to GPU
+    CUDA_CHECK(cudaMemcpy(buffer_ptrs_gpu_, buffer_ptrs_,
+                          sizeof(void*) * NUM_MAX_NVL_PEERS,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(barrier_signal_ptrs_gpu_, barrier_signal_ptrs_,
+                          sizeof(int*) * NUM_MAX_NVL_PEERS,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaDeviceSynchronize());
+  }
 
-//   // Initialize NVSHMEM and allocate RDMA buffer
-//   if (num_rdma_bytes_ > 0) {
-//     if (!root_unique_id_opt.has_value()) {
-//       throw std::runtime_error("sync: missing root NVSHMEM unique id");
-//     }
-//     auto uid_str = root_unique_id_opt->cast<std::string>();
-//     std::vector<int8_t> uid_vec(uid_str.begin(), uid_str.end());
+#ifdef ENABLE_NVSHMEM
+  // Initialize NVSHMEM and allocate RDMA buffer
+  if (num_rdma_bytes_ > 0) {
+    if (!root_unique_id_opt.has_value()) {
+      throw std::runtime_error("sync: missing root NVSHMEM unique id");
+    }
+    auto uid_str = root_unique_id_opt->cast<std::string>();
+    std::vector<int8_t> uid_vec(uid_str.begin(), uid_str.end());
 
-//     int nvshmem_rank = rdma_rank_;
-//     int nvshmem_world = num_rdma_ranks_;
-//     init_with_unique_id(uid_vec, nvshmem_rank, nvshmem_world);
+    int nvshmem_rank = rdma_rank_;
+    int nvshmem_world = num_rdma_ranks_;
+    init_with_unique_id(uid_vec, nvshmem_rank, nvshmem_world);
 
-//     nvshmem_barrier_all();
-//     rdma_buffer_ptr_ = nvshmem_malloc(num_rdma_bytes_);
-//     CUDA_CHECK(cudaMemset(rdma_buffer_ptr_, 0, num_rdma_bytes_));
-//     nvshmem_barrier_all();
-//   }
+    nvshmem_barrier_all();
+    rdma_buffer_ptr_ = nvshmem_malloc(num_rdma_bytes_);
+    CUDA_CHECK(cudaMemset(rdma_buffer_ptr_, 0, num_rdma_bytes_));
+    nvshmem_barrier_all();
+  }
+#endif
 
-//   available_ = true;
-// }
+  available_ = true;
+}
 
 py::bytearray Buffer::get_local_ipc_handle() const {
   if (!local_allocated_ || num_nvl_bytes_ == 0) {
@@ -254,30 +271,6 @@ void Buffer::intranode_all_to_all(torch::Tensor input, torch::Tensor output,
 
   comm_stream_.synchronize();
 }
-
-void Buffer::internode_put(torch::Tensor dst_symmetric, torch::Tensor src,
-                           int dst_pe) {
-  if (!src.is_cuda() || !dst_symmetric.is_cuda()) {
-    throw std::runtime_error("internode_put expects CUDA tensors");
-  }
-  nvshmem_putmem(dst_symmetric.data_ptr(), src.data_ptr(), src.nbytes(),
-                 dst_pe);
-  nvshmem_quiet();
-}
-
-void Buffer::internode_get(torch::Tensor dst, torch::Tensor src_symmetric,
-                           int src_pe) {
-  if (!dst.is_cuda() || !src_symmetric.is_cuda()) {
-    throw std::runtime_error("internode_get expects CUDA tensors");
-  }
-  nvshmem_getmem(dst.data_ptr(), src_symmetric.data_ptr(), dst.nbytes(),
-                 src_pe);
-  nvshmem_quiet();
-}
-
-void Buffer::internode_all_to_all(torch::Tensor input, torch::Tensor output,
-                                  torch::Tensor input_split_sizes,
-                                  torch::Tensor output_split_sizes) {}
 
 torch::Tensor Buffer::get_local_buffer_tensor(const py::object& dtype,
                                               int64_t offset,

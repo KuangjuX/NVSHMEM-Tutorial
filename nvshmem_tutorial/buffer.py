@@ -1,7 +1,7 @@
 import os
 import torch
 import torch.distributed as dist
-import _nvshmem_pybind_cpp as nvshmem_runtime  # The name comes from setup.py
+import _nvshmem_tutorial as nvshmem_runtime  # The name comes from setup.py
 
 
 class NvshmemBuffer:
@@ -51,6 +51,10 @@ class NvshmemBuffer:
         ipc_handles = [None] * self.group_size
         local_ipc_handle = self.runtime.get_local_ipc_handle()
         dist.all_gather_object(ipc_handles, local_ipc_handle, group)
+
+        root_unique_id = None
+
+        self.runtime.sync(device_ids, ipc_handles, root_unique_id)
 
     def __del__(self):
         pass

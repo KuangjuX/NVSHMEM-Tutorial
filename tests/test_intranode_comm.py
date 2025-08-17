@@ -10,15 +10,20 @@ from nvshmem_tutorial import NvshmemBuffer
 import torch.distributed as dist
 
 
-def test_all_gather(buffer: NvshmemBuffer):
+def test_all_gather(nvshmem_buffer: NvshmemBuffer):
+    """
+    Test all-gather communication.
+    """
     tensor = torch.randn(1024, dtype=torch.float32, device="cuda")
-    tensor_list = [torch.zeros_like(tensor) for _ in range(buffer.group_size)]
-    buffer.intranode_all_gather(tensor_list, tensor, async_op=True)
+    tensor_list = [torch.zeros_like(tensor) for _ in range(nvshmem_buffer.group_size)]
+    nvshmem_buffer.intranode_all_gather(tensor_list, tensor, async_op=True)
 
     ref_tensor_list = [torch.zeros_like(tensor) for _ in range(buffer.group_size)]
     dist.all_gather(ref_tensor_list, tensor, group=dist.group.WORLD)
 
     for i in range(buffer.group_size):
+        print(f"tensor_list[{i}] = {tensor_list[i]}")
+        print(f"ref_tensor_list[{i}] = {ref_tensor_list[i]}")
         torch.testing.assert_close(tensor_list[i], ref_tensor_list[i])
 
 

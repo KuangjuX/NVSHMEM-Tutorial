@@ -34,10 +34,10 @@ class Buffer {
 
   // DeepEP-like: open CUDA IPC handles and/or initialize NVSHMEM and allocate
   // RDMA buffer
-  // void sync(
-  //     const std::vector<int>& device_ids,
-  //     const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
-  //     const std::optional<py::bytearray>& root_unique_id_opt);
+  void sync(
+      const std::vector<int>& device_ids,
+      const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
+      const std::optional<py::bytearray>& root_unique_id_opt);
 
   // Intra-node (NVLink) helpers
   py::bytearray get_local_ipc_handle() const;
@@ -56,17 +56,6 @@ class Buffer {
                             const torch::Tensor& tensor, bool async_op);
 
   void intranode_all_to_all(torch::Tensor input, torch::Tensor output,
-                            torch::Tensor input_split_sizes,
-                            torch::Tensor output_split_sizes);
-
-  // Inter-node (NVSHMEM) helpers
-  void internode_put(torch::Tensor dst_symmetric, torch::Tensor src,
-                     int dst_pe);
-
-  void internode_get(torch::Tensor dst, torch::Tensor src_symmetric,
-                     int src_pe);
-
-  void internode_all_to_all(torch::Tensor input, torch::Tensor output,
                             torch::Tensor input_split_sizes,
                             torch::Tensor output_split_sizes);
 
