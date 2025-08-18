@@ -177,29 +177,6 @@ py::bytearray Buffer::get_local_ipc_handle() const {
       sizeof(cudaIpcMemHandle_t));
 }
 
-void Buffer::open_ipc_handles(
-    const std::vector<std::optional<py::bytearray>>& all_handles) {
-  if (num_nvl_bytes_ == 0) return;
-  if (static_cast<int>(all_handles.size()) != num_local_pes_) {
-    throw std::runtime_error(
-        "open_ipc_handles: size mismatch with num_local_pes");
-  }
-  for (int pe = 0; pe < num_local_pes_; ++pe) {
-    if (pe == local_pe_) continue;
-    if (!all_handles[pe].has_value()) {
-      throw std::runtime_error("Missing IPC handle for peer");
-    }
-    auto h = std::string(all_handles[pe]->cast<std::string>());
-    if (h.size() != sizeof(cudaIpcMemHandle_t)) {
-      throw std::runtime_error("IPC handle size mismatch");
-    }
-    std::memcpy(ipc_handles_[pe].reserved, h.data(),
-                sizeof(cudaIpcMemHandle_t));
-    CUDA_CHECK(cudaIpcOpenMemHandle(&buffer_ptrs_[pe], ipc_handles_[pe],
-                                    cudaIpcMemLazyEnablePeerAccess));
-  }
-}
-
 torch::Tensor Buffer::get_local_buffer_u8() const {
   if (!local_allocated_ || num_nvl_bytes_ == 0) {
     throw std::runtime_error("No local NVLink buffer allocated");
@@ -250,7 +227,8 @@ void Buffer::intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
 
 void Buffer::intranode_all_to_all(torch::Tensor input, torch::Tensor output,
                                   torch::Tensor input_split_sizes,
-                                  torch::Tensor output_split_sizes) {
+                                  torch::Tensor output_split_sizes,
+                                  bool async_op) {
   if (!input.is_cuda() || !output.is_cuda()) {
     throw std::runtime_error("intranode_all_to_all expects CUDA tensors");
   }
@@ -269,7 +247,9 @@ void Buffer::intranode_all_to_all(torch::Tensor input, torch::Tensor output,
   //     output_split_sizes.data_ptr<int64_t>(), buffer_ptrs_gpu_, local_pe_,
   //     num_local_pes_, num_device_sms_, comm_stream_);
 
-  comm_stream_.synchronize();
+  if (!async_op) {
+    cudaStreamSynchronize(comm_stream_);
+  }
 }
 
 torch::Tensor Buffer::get_local_buffer_tensor(const py::object& dtype,
