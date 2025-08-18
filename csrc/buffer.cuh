@@ -28,12 +28,8 @@ class Buffer {
   // Free Symmetric Memory.
   void free_symmetric(torch::Tensor t);
 
-  // DeepEP-like: export NVSHMEM unique id (only on rdma root, i.e., rank %
-  // NUM_MAX_NVL_PEERS == 0)
   // py::bytearray get_local_nvshmem_unique_id() const;
 
-  // DeepEP-like: open CUDA IPC handles and/or initialize NVSHMEM and allocate
-  // RDMA buffer
   void sync(
       const std::vector<int>& device_ids,
       const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
@@ -41,12 +37,6 @@ class Buffer {
 
   // Intra-node (NVLink) helpers
   py::bytearray get_local_ipc_handle() const;
-
-  void open_ipc_handles(
-      const std::vector<std::optional<py::bytearray>>& all_handles);
-
-  // void intranode_memcpy_to(int dst_local_pe, int64_t dst_offset_bytes,
-  //                          torch::Tensor src);
 
   torch::Tensor get_local_buffer_u8() const;
 
@@ -57,7 +47,7 @@ class Buffer {
 
   void intranode_all_to_all(torch::Tensor input, torch::Tensor output,
                             torch::Tensor input_split_sizes,
-                            torch::Tensor output_split_sizes);
+                            torch::Tensor output_split_sizes, bool async_op);
 
   // DeepEP-like: view buffers as typed tensor
   torch::Tensor get_local_buffer_tensor(const py::object& dtype, int64_t offset,

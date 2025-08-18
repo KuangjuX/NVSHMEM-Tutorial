@@ -10,8 +10,6 @@
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.doc() = "NVSHMEM bindings for benchmarking with torchrun";
 
-  // *** MODIFICATION FOR CONSTANT ***
-  // Instead of a macro, use sizeof() which is more robust
   m.attr("UNIQUE_ID_LEN") = py::int_(sizeof(nvshmemx_uniqueid_t));
 
   py::class_<Buffer>(m, "Buffer")
@@ -19,7 +17,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("alloc_symmetric", &Buffer::alloc_symmetric)
       .def("free_symmetric", &Buffer::free_symmetric)
       .def("get_local_ipc_handle", &Buffer::get_local_ipc_handle)
-      .def("open_ipc_handles", &Buffer::open_ipc_handles)
       .def("get_local_buffer_u8", &Buffer::get_local_buffer_u8)
       .def("sync", &Buffer::sync)
       // Intranode communication
