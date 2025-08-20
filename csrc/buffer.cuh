@@ -12,6 +12,7 @@
 
 namespace py = pybind11;
 
+namespace nvshmem_tutorial {
 class Buffer {
   STATIC_ASSERT(NUM_MAX_NVL_PEERS == 8, "NUM_MAX_NVL_PEERS must be equal to 8");
 
@@ -48,6 +49,9 @@ class Buffer {
   void intranode_all_to_all(torch::Tensor input, torch::Tensor output,
                             torch::Tensor input_split_sizes,
                             torch::Tensor output_split_sizes, bool async_op);
+
+  void internode_all_gather(std::vector<torch::Tensor>& tensor_list,
+                            const torch::Tensor& tensor, bool async_op);
 
   // DeepEP-like: view buffers as typed tensor
   torch::Tensor get_local_buffer_tensor(const py::object& dtype, int64_t offset,
@@ -101,3 +105,4 @@ class Buffer {
 
   at::cuda::CUDAStream comm_stream_;
 };
+}  // namespace nvshmem_tutorial

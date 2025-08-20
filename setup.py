@@ -48,6 +48,8 @@ setup(
             sources=[
                 "csrc/put.cu",
                 "csrc/buffer.cu",
+                "csrc/intranode.cu",
+                "csrc/internode.cu",
                 "csrc/pybind.cpp",
             ],
             include_dirs=include_dirs,

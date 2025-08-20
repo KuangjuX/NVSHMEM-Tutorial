@@ -7,6 +7,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+using namespace nvshmem_tutorial;
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.doc() = "NVSHMEM bindings for benchmarking with torchrun";
 

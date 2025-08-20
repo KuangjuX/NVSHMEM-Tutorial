@@ -16,7 +16,7 @@ class NvshmemBuffer:
         num_rdma_bytes: int,
     ):
         """Initialize the NVSHMEM buffer."""
-        os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "none"
+        # os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "none"
 
         self.group = group
         self.group_size = group.size()
@@ -53,11 +53,21 @@ class NvshmemBuffer:
         dist.all_gather_object(ipc_handles, local_ipc_handle, group)
 
         root_unique_id = None
+        if self.runtime.get_rdma_rank() > 1:
+            os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = 1
+
+            # Synchronize using the root ID.
+            nvshmem_unique_ids = [None] * self.group_size
+            if self.runtime.get_rdma_rank() == 0:
+                root_unique_id = self.runtime.get_local_nvshmem_unique_id()
+            dist.all_gather_object(nvshmem_unique_ids, root_unique_id, group)
+            root_unique_id = nvshmem_unique_ids[self.runtime.get_rdma_rank()]
 
         self.runtime.sync(device_ids, ipc_handles, root_unique_id)
 
     def __del__(self):
-        pass
+        self.runtime.destroy()
+        self.runtime = None
 
     def get_num_device_sms(self):
         """Get the number of SMs on the device."""
@@ -71,19 +81,19 @@ class NvshmemBuffer:
             raise ValueError("Tensor list must match group size")
         self.runtime.intranode_all_gather(tensor_list, tensor, async_op)
 
-    def intranode_all_to_all(
-        self, input_tensor, output_tensor, input_split_sizes, output_split_sizes
-    ):
-        """Perform intra-node all-to-all communication using NVLink and CUDA IPC."""
-        if not input_tensor.is_cuda() or not output_tensor.is_cuda():
-            raise ValueError("Input and output must be CUDA tensors")
-        if not input_split_sizes.is_cuda() or not output_split_sizes.is_cuda():
-            raise ValueError("Split sizes must be CUDA tensors")
-        if (
-            input_split_sizes.numel() != self.group_size
-            or output_split_sizes.numel() != self.group_size
-        ):
-            raise ValueError("Split sizes must match group size")
-        self.runtime.intranode_all_to_all(
-            input_tensor, output_tensor, input_split_sizes, output_split_sizes
-        )
+    # def intranode_all_to_all(
+    #     self, input_tensor, output_tensor, input_split_sizes, output_split_sizes
+    # ):
+    #     """Perform intra-node all-to-all communication using NVLink and CUDA IPC."""
+    #     if not input_tensor.is_cuda() or not output_tensor.is_cuda():
+    #         raise ValueError("Input and output must be CUDA tensors")
+    #     if not input_split_sizes.is_cuda() or not output_split_sizes.is_cuda():
+    #         raise ValueError("Split sizes must be CUDA tensors")
+    #     if (
+    #         input_split_sizes.numel() != self.group_size
+    #         or output_split_sizes.numel() != self.group_size
+    #     ):
+    #         raise ValueError("Split sizes must match group size")
+    #     self.runtime.intranode_all_to_all(
+    #         input_tensor, output_tensor, input_split_sizes, output_split_sizes
+    #     )
