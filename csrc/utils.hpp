@@ -18,6 +18,8 @@
   #define NUM_TIMEOUT_CYCLES 20000000000ull  // 20G cycles ~= 10s
 #endif
 
+#define NUM_BUFFER_ALIGNMENT_BYTES 128
+
 #define CUDA_CHECK(stmt)                                                    \
   do {                                                                      \
     cudaError_t result = (stmt);                                            \

@@ -7,6 +7,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+using namespace nvshmem_tutorial;
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.doc() = "NVSHMEM bindings for benchmarking with torchrun";
 
@@ -32,12 +34,19 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("get_num_local_pes", &Buffer::get_num_local_pes)
       .def("get_num_nvl_bytes", &Buffer::get_num_nvl_bytes);
 
-  // Bootstrap functions
+  // Native API
   m.def("get_unique_id", &get_unique_id,
         "Get a unique ID for NVSHMEM initialization (call on rank 0)");
   m.def("init_with_unique_id", &init_with_unique_id,
         "Initialize NVSHMEM using a unique ID", py::arg("unique_id_vec"),
         py::arg("rank"), py::arg("world_size"));
+
+  m.def("nvshmem_alloc", &nvshmem::alloc,
+        "Allocate Symmetric memory with NVSHMEM", py::arg("size"),
+        py::arg("alignment"));
+  m.def("nvshmem_free", &nvshmem::free, "Free Symmetric memory with NVSHMEM",
+        py::arg("ptr"));
+  m.def("nvshmem_barrier", &nvshmem::barrier, "Barrier with NVSHMEM");
 
   // Utility functions
   m.def("my_pe", &nvshmem_my_pe, "Get my processing element (PE) ID");
