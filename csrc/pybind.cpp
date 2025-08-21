@@ -1,7 +1,6 @@
 
 #include "buffer.cuh"
 #include "nvshmem.hpp"
-#include "put.cuh"
 
 #include <pybind11/chrono.h>
 #include <pybind11/pybind11.h>
@@ -44,26 +43,14 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("nvshmem_alloc_tensor", &nvshmem::alloc_tensor,
         "Allocate Symmetric memory with NVSHMEM", py::arg("size"),
         py::arg("alignment"));
-  m.def("nvshmem_free", &nvshmem::free, "Free Symmetric memory with NVSHMEM",
-        py::arg("ptr"));
+  m.def("nvshmem_free_tensor", &nvshmem::free_tensor,
+        "Free Symmetric memory with NVSHMEM", py::arg("tensor"));
   m.def("nvshmem_barrier", &nvshmem::barrier, "Barrier with NVSHMEM");
 
-  m.def("nvshmem_get_mem", &nvshmem::get_mem_tensor, "Get memory with NVSHMEM",
+  m.def("nvshmem_get_tensor", &nvshmem::get_tensor, "Get memory with NVSHMEM",
         py::arg("local_tensor"), py::arg("remote_tensor"), py::arg("nbytes"),
         py::arg("rank"));
-  m.def("nvshmem_put_mem", &nvshmem::put_mem_tensor, "Put memory with NVSHMEM",
+  m.def("nvshmem_put_tensor", &nvshmem::put_tensor, "Put memory with NVSHMEM",
         py::arg("remote_tensor"), py::arg("local_tensor"), py::arg("nbytes"),
         py::arg("rank"));
-
-  // Utility functions
-  m.def("my_pe", &nvshmem_my_pe, "Get my processing element (PE) ID");
-  m.def("n_pes", &nvshmem_n_pes, "Get the number of PEs");
-  m.def("barrier_all", &nvshmem_barrier_all, "Barrier across all PEs");
-
-  m.def("put_blocking", &put_blocking, "Perform a blocking put operation",
-        py::arg("dst"), py::arg("src"), py::arg("dst_pe"));
-  m.def("launch_ring_put_block", &launch_ring_put_block,
-        "Launch a ring put block operation", py::arg("send_tensor"),
-        py::arg("recv_tensor"), py::arg("num_blocks"),
-        py::arg("threads_per_block"));
 }

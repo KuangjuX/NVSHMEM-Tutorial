@@ -46,7 +46,6 @@ setup(
         CUDAExtension(
             name="_nvshmem_tutorial",
             sources=[
-                "csrc/put.cu",
                 "csrc/buffer.cu",
                 "csrc/intranode.cu",
                 "csrc/internode.cu",
