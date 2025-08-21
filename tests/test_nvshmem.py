@@ -5,8 +5,7 @@ import torch.distributed as dist
 from nvshmem_tutorial import (
     get_unique_id,
     init_with_unique_id,
-    nvshmem_alloc,
-    nvshmem_free,
+    nvshmem_alloc_tensor,
     nvshmem_barrier,
     nvshmem_get_mem,
     nvshmem_put_mem,
@@ -15,7 +14,7 @@ from nvshmem_tutorial import (
 os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "none"
 
 
-def bootstrap_nvshmem():
+def init_nvshmem():
     """
     Initializes torch.distributed and then uses it to bootstrap NVSHMEM.
     """
@@ -51,7 +50,7 @@ def put(rank, world_size, size_bytes=1024):
             print("This benchmark requires at least 2 processes. Skipping.")
         return
 
-    buffer = nvshmem_alloc(size_bytes, 128)
+    buffer = nvshmem_alloc_tensor(size_bytes, 128)
 
     local_rank = 0
     remote_rank = 1
@@ -61,21 +60,55 @@ def put(rank, world_size, size_bytes=1024):
     if rank == local_rank:
         local_tensor = torch.ones(size_bytes, dtype=torch.uint8, device="cuda")
         nvshmem_put_mem(buffer, local_tensor, size_bytes, remote_rank)
-        nvshmem_barrier()
+
+    nvshmem_barrier()
 
     if rank == remote_rank:
         remote_tensor = torch.zeros(size_bytes, dtype=torch.uint8, device="cuda")
-        nvshmem_get_mem(remote_tensor, buffer, size_bytes, local_rank)
-        print(remote_tensor)
+        remote_tensor.copy_(buffer)
+        print(f"remote_tensor: {remote_tensor}")
+
+
+def get(rank, world_size, size_bytes=1024):
+    if world_size < 2:
+        if rank == 0:
+            print("This benchmark requires at least 2 processes. Skipping.")
+        return
+
+    buffer = nvshmem_alloc_tensor(size_bytes, 128)
+
+    local_rank = 1
+    remote_rank = 0
+
+    nvshmem_barrier()
+
+    if rank == remote_rank:
+        remote_tensor = torch.ones(size_bytes, dtype=torch.uint8, device="cuda")
+        buffer.copy_(remote_tensor)
+
+    nvshmem_barrier()
+
+    if rank == local_rank:
+        local_tensor = torch.zeros(size_bytes, dtype=torch.uint8, device="cuda")
+        nvshmem_get_mem(local_tensor, buffer, size_bytes, remote_rank)
+
+    nvshmem_barrier()
+
+    if rank == local_rank:
+        print(f"local_tensor: {local_tensor}")
 
 
 def main():
     local_rank = int(os.environ["LOCAL_RANK"])
     torch.cuda.set_device(local_rank)
 
-    rank, world_size = bootstrap_nvshmem()
+    rank, world_size = init_nvshmem()
 
     put(rank, world_size)
+
+    get(rank, world_size)
+
+    dist.destroy_process_group()
 
 
 if __name__ == "__main__":

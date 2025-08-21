@@ -54,20 +54,26 @@ namespace nvshmem_tutorial::nvshmem {
  * @param alignment The alignment of the memory to allocate.
  * @return A pointer to the allocated memory.
  */
-void* alloc(size_t size, size_t alignment) {
+inline void* alloc(size_t size, size_t alignment) {
   return nvshmem_align(alignment, size);
+}
+
+inline torch::Tensor alloc_tensor(int64_t size, size_t alignment) {
+  void* ptr = alloc(size, alignment);
+  return torch::from_blob(ptr, {size},
+                          torch::dtype(torch::kUInt8).device(torch::kCUDA));
 }
 
 /**
  * Free Symmetric memory with NVSHMEM
  * @param ptr The pointer to the memory to free.
  */
-void free(void* ptr) { nvshmem_free(ptr); }
+inline void free(void* ptr) { nvshmem_free(ptr); }
 
 /**
  * Barrier with NVSHMEM
  */
-void barrier() { nvshmem_barrier_all(); }
+inline void barrier() { nvshmem_barrier_all(); }
 
 /**
  * Get memory with NVSHMEM
@@ -76,7 +82,8 @@ void barrier() { nvshmem_barrier_all(); }
  * @param nbytes The size of the memory to get.
  * @param rank The rank of the remote memory.
  */
-void get_mem(void* local_ptr, void* remote_ptr, size_t nbytes, int rank) {
+inline void get_mem(void* local_ptr, void* remote_ptr, size_t nbytes,
+                    int rank) {
   nvshmem_getmem(local_ptr, remote_ptr, nbytes, rank);
 }
 
@@ -87,7 +94,8 @@ void get_mem(void* local_ptr, void* remote_ptr, size_t nbytes, int rank) {
  * @param nbytes The size of the memory to put.
  * @param rank The rank of the remote memory.
  */
-void put_mem(void* remote_ptr, void* local_ptr, size_t nbytes, int rank) {
+inline void put_mem(void* remote_ptr, void* local_ptr, size_t nbytes,
+                    int rank) {
   nvshmem_putmem(remote_ptr, local_ptr, nbytes, rank);
 }
 
@@ -98,21 +106,27 @@ void put_mem(void* remote_ptr, void* local_ptr, size_t nbytes, int rank) {
  * @param nbytes The size of the memory to get.
  * @param rank The rank of the remote tensor.
  */
-void get_mem_tensor(torch::Tensor& local_tensor, torch::Tensor& remote_tensor,
-                    size_t nbytes, int rank) {
+inline void get_mem_tensor(torch::Tensor& local_tensor,
+                           torch::Tensor& remote_tensor, size_t nbytes,
+                           int rank) {
   void* local_ptr = local_tensor.data_ptr();
   void* remote_ptr = remote_tensor.data_ptr();
   get_mem(local_ptr, remote_ptr, nbytes, rank);
 }
 
-void put_mem_tensor(torch::Tensor& local_tensor, torch::Tensor& remote_tensor,
-                    size_t nbytes, int rank) {
+/**
+ * Put memory with NVSHMEM
+ * @param local_tensor The local tensor to put the memory from.
+ * @param remote_tensor The remote tensor to put the memory to.
+ * @param nbytes The size of the memory to put.
+ * @param rank The rank of the remote tensor.
+ */
+inline void put_mem_tensor(torch::Tensor& remote_tensor,
+                           torch::Tensor& local_tensor, size_t nbytes,
+                           int rank) {
   void* local_ptr = local_tensor.data_ptr();
   void* remote_ptr = remote_tensor.data_ptr();
   put_mem(remote_ptr, local_ptr, nbytes, rank);
 }
 
-/**
- * Put memory with NVSHMEM
- * @param local_tensor The local tensor to put the memory from.
 }  // namespace nvshmem_tutorial::nvshmem
