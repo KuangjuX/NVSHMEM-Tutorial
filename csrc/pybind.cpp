@@ -48,6 +48,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         py::arg("ptr"));
   m.def("nvshmem_barrier", &nvshmem::barrier, "Barrier with NVSHMEM");
 
+  m.def("nvshmem_get_mem", &nvshmem::get_mem_tensor, "Get memory with NVSHMEM",
+        py::arg("local_tensor"), py::arg("remote_tensor"), py::arg("nbytes"),
+        py::arg("rank"));
+  m.def("nvshmem_put_mem", &nvshmem::put_mem_tensor, "Put memory with NVSHMEM",
+        py::arg("local_tensor"), py::arg("remote_tensor"), py::arg("nbytes"),
+        py::arg("rank"));
+
   // Utility functions
   m.def("my_pe", &nvshmem_my_pe, "Get my processing element (PE) ID");
   m.def("n_pes", &nvshmem_n_pes, "Get the number of PEs");

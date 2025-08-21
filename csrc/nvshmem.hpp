@@ -80,4 +80,39 @@ void get_mem(void* local_ptr, void* remote_ptr, size_t nbytes, int rank) {
   nvshmem_getmem(local_ptr, remote_ptr, nbytes, rank);
 }
 
+/**
+ * Put memory with NVSHMEM
+ * @param dst The pointer to the destination memory.
+ * @param src The pointer to the source memory.
+ * @param nbytes The size of the memory to put.
+ * @param rank The rank of the remote memory.
+ */
+void put_mem(void* remote_ptr, void* local_ptr, size_t nbytes, int rank) {
+  nvshmem_putmem(remote_ptr, local_ptr, nbytes, rank);
+}
+
+/**
+ * Get memory with NVSHMEM
+ * @param local_tensor The local tensor to store the memory.
+ * @param remote_tensor The remote tensor to get the memory from.
+ * @param nbytes The size of the memory to get.
+ * @param rank The rank of the remote tensor.
+ */
+void get_mem_tensor(torch::Tensor& local_tensor, torch::Tensor& remote_tensor,
+                    size_t nbytes, int rank) {
+  void* local_ptr = local_tensor.data_ptr();
+  void* remote_ptr = remote_tensor.data_ptr();
+  get_mem(local_ptr, remote_ptr, nbytes, rank);
+}
+
+void put_mem_tensor(torch::Tensor& local_tensor, torch::Tensor& remote_tensor,
+                    size_t nbytes, int rank) {
+  void* local_ptr = local_tensor.data_ptr();
+  void* remote_ptr = remote_tensor.data_ptr();
+  put_mem(remote_ptr, local_ptr, nbytes, rank);
+}
+
+/**
+ * Put memory with NVSHMEM
+ * @param local_tensor The local tensor to put the memory from.
 }  // namespace nvshmem_tutorial::nvshmem
