@@ -1,4 +1,5 @@
 #include "buffer.cuh"
+#include "nvshmem.hpp"
 
 #include <cstring>
 
@@ -154,10 +155,17 @@ void Buffer::sync(
     int nvshmem_world = num_rdma_ranks_;
     init_with_unique_id(uid_vec, nvshmem_rank, nvshmem_world);
 
-    nvshmem_barrier_all();
-    rdma_buffer_ptr_ = nvshmem_malloc(num_rdma_bytes_);
+    // Barrier
+    nvshmem::barrier();
+
+    rdma_buffer_ptr_ =
+        nvshmem::alloc(num_rdma_bytes_, NUM_BUFFER_ALIGNMENT_BYTES);
+
+    // Clean buffer.
     CUDA_CHECK(cudaMemset(rdma_buffer_ptr_, 0, num_rdma_bytes_));
-    nvshmem_barrier_all();
+
+    // Barrier
+    nvshmem::barrier();
   }
 #endif
 

@@ -45,3 +45,39 @@ inline void init_with_unique_id(const std::vector<int8_t>& unique_id_vec,
   assert(mype_node == rank);
   nvshmem_barrier_all();
 }
+
+namespace nvshmem_tutorial::nvshmem {
+
+/**
+ * Allocate Symmetric memory with NVSHMEM
+ * @param size The size of the memory to allocate.
+ * @param alignment The alignment of the memory to allocate.
+ * @return A pointer to the allocated memory.
+ */
+void* alloc(size_t size, size_t alignment) {
+  return nvshmem_align(alignment, size);
+}
+
+/**
+ * Free Symmetric memory with NVSHMEM
+ * @param ptr The pointer to the memory to free.
+ */
+void free(void* ptr) { nvshmem_free(ptr); }
+
+/**
+ * Barrier with NVSHMEM
+ */
+void barrier() { nvshmem_barrier_all(); }
+
+/**
+ * Get memory with NVSHMEM
+ * @param local_ptr The pointer to the local memory.
+ * @param remote_ptr The pointer to the remote memory.
+ * @param nbytes The size of the memory to get.
+ * @param rank The rank of the remote memory.
+ */
+void get_mem(void* local_ptr, void* remote_ptr, size_t nbytes, int rank) {
+  nvshmem_getmem(local_ptr, remote_ptr, nbytes, rank);
+}
+
+}  // namespace nvshmem_tutorial::nvshmem
