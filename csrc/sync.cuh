@@ -45,12 +45,12 @@ __forceinline__ __device__ void barrier_block(int** barrier_signal_ptrs,
 }
 
 template <int kNumRanks>
-__global__ void barrier(int** barrier_signal_ptrs, int rank) {
+__forceinline__ __global__ void barrier(int** barrier_signal_ptrs, int rank) {
   barrier_block<kNumRanks>(barrier_signal_ptrs, rank);
 }
 
-void barrier(int** barrier_signal_ptrs, int rank, int num_ranks,
-             cudaStream_t stream) {
+inline void barrier(int** barrier_signal_ptrs, int rank, int num_ranks,
+                    cudaStream_t stream) {
 #define BARRIER_LAUNCH_CASE(ranks)                                \
   LAUNCH_KERNEL(&cfg, barrier<ranks>, barrier_signal_ptrs, rank); \
   break

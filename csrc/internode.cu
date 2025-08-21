@@ -1,4 +1,6 @@
 #include "buffer.cuh"
+#include "nvshmem.hpp"
+#include "sync.cuh"
 #include "utils.hpp"
 
 namespace nvshmem_tutorial {
@@ -51,4 +53,6 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
       cudaStreamSynchronize(comm_stream_);
     }
   }
+}
+
 }  // namespace nvshmem_tutorial

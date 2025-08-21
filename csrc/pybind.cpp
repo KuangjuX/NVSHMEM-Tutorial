@@ -41,12 +41,19 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Initialize NVSHMEM using a unique ID", py::arg("unique_id_vec"),
         py::arg("rank"), py::arg("world_size"));
 
-  m.def("nvshmem_alloc", &nvshmem::alloc,
+  m.def("nvshmem_alloc_tensor", &nvshmem::alloc_tensor,
         "Allocate Symmetric memory with NVSHMEM", py::arg("size"),
         py::arg("alignment"));
   m.def("nvshmem_free", &nvshmem::free, "Free Symmetric memory with NVSHMEM",
         py::arg("ptr"));
   m.def("nvshmem_barrier", &nvshmem::barrier, "Barrier with NVSHMEM");
+
+  m.def("nvshmem_get_mem", &nvshmem::get_mem_tensor, "Get memory with NVSHMEM",
+        py::arg("local_tensor"), py::arg("remote_tensor"), py::arg("nbytes"),
+        py::arg("rank"));
+  m.def("nvshmem_put_mem", &nvshmem::put_mem_tensor, "Put memory with NVSHMEM",
+        py::arg("remote_tensor"), py::arg("local_tensor"), py::arg("nbytes"),
+        py::arg("rank"));
 
   // Utility functions
   m.def("my_pe", &nvshmem_my_pe, "Get my processing element (PE) ID");
