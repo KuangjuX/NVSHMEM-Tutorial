@@ -49,6 +49,15 @@ inline void init_with_unique_id(const std::vector<int8_t>& unique_id_vec,
 namespace nvshmem_tutorial::nvshmem {
 
 /**
+ * Get the unique id of the current rank.
+ * @return The unique id of the current rank.
+ */
+inline pybind11::bytearray get_local_nvshmem_unique_id() {
+  auto unique_id = get_unique_id();
+  return {reinterpret_cast<const char*>(unique_id.data()), unique_id.size()};
+}
+
+/**
  * Allocate Symmetric memory with NVSHMEM
  * @param size The size of the memory to allocate.
  * @param alignment The alignment of the memory to allocate.
@@ -69,6 +78,11 @@ inline torch::Tensor alloc_tensor(int64_t size, size_t alignment) {
  * @param ptr The pointer to the memory to free.
  */
 inline void free(void* ptr) { nvshmem_free(ptr); }
+
+inline void free_tensor(torch::Tensor& tensor) {
+  void* ptr = tensor.data_ptr();
+  free(ptr);
+}
 
 /**
  * Barrier with NVSHMEM
@@ -106,9 +120,8 @@ inline void put_mem(void* remote_ptr, void* local_ptr, size_t nbytes,
  * @param nbytes The size of the memory to get.
  * @param rank The rank of the remote tensor.
  */
-inline void get_mem_tensor(torch::Tensor& local_tensor,
-                           torch::Tensor& remote_tensor, size_t nbytes,
-                           int rank) {
+inline void get_tensor(torch::Tensor& local_tensor,
+                       torch::Tensor& remote_tensor, size_t nbytes, int rank) {
   void* local_ptr = local_tensor.data_ptr();
   void* remote_ptr = remote_tensor.data_ptr();
   get_mem(local_ptr, remote_ptr, nbytes, rank);
@@ -121,9 +134,8 @@ inline void get_mem_tensor(torch::Tensor& local_tensor,
  * @param nbytes The size of the memory to put.
  * @param rank The rank of the remote tensor.
  */
-inline void put_mem_tensor(torch::Tensor& remote_tensor,
-                           torch::Tensor& local_tensor, size_t nbytes,
-                           int rank) {
+inline void put_tensor(torch::Tensor& remote_tensor,
+                       torch::Tensor& local_tensor, size_t nbytes, int rank) {
   void* local_ptr = local_tensor.data_ptr();
   void* remote_ptr = remote_tensor.data_ptr();
   put_mem(remote_ptr, local_ptr, nbytes, rank);

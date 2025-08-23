@@ -6,18 +6,19 @@ from nvshmem_tutorial import (
     get_unique_id,
     init_with_unique_id,
     nvshmem_alloc_tensor,
+    nvshmem_free_tensor,
     nvshmem_barrier,
-    nvshmem_get_mem,
-    nvshmem_put_mem,
+    nvshmem_get_tensor,
+    nvshmem_put_tensor,
 )
-
-os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "none"
 
 
 def init_nvshmem():
     """
     Initializes torch.distributed and then uses it to bootstrap NVSHMEM.
     """
+    os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "none"
+
     rank = int(os.environ["RANK"])
     local_rank = int(os.environ["LOCAL_RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
@@ -59,7 +60,7 @@ def put(rank, world_size, size_bytes=1024):
 
     if rank == local_rank:
         local_tensor = torch.ones(size_bytes, dtype=torch.uint8, device="cuda")
-        nvshmem_put_mem(buffer, local_tensor, size_bytes, remote_rank)
+        nvshmem_put_tensor(buffer, local_tensor, size_bytes, remote_rank)
 
     nvshmem_barrier()
 
@@ -67,6 +68,9 @@ def put(rank, world_size, size_bytes=1024):
         remote_tensor = torch.zeros(size_bytes, dtype=torch.uint8, device="cuda")
         remote_tensor.copy_(buffer)
         print(f"remote_tensor: {remote_tensor}")
+
+    nvshmem_free_tensor(buffer)
+    nvshmem_barrier()
 
 
 def get(rank, world_size, size_bytes=1024):
@@ -90,12 +94,15 @@ def get(rank, world_size, size_bytes=1024):
 
     if rank == local_rank:
         local_tensor = torch.zeros(size_bytes, dtype=torch.uint8, device="cuda")
-        nvshmem_get_mem(local_tensor, buffer, size_bytes, remote_rank)
+        nvshmem_get_tensor(local_tensor, buffer, size_bytes, remote_rank)
 
     nvshmem_barrier()
 
     if rank == local_rank:
         print(f"local_tensor: {local_tensor}")
+
+    nvshmem_free_tensor(buffer)
+    nvshmem_barrier()
 
 
 def main():

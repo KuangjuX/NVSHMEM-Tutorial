@@ -3,8 +3,8 @@ from _nvshmem_tutorial import (
     get_unique_id,
     init_with_unique_id,
     nvshmem_alloc_tensor,
-    nvshmem_free,
+    nvshmem_free_tensor,
     nvshmem_barrier,
-    nvshmem_get_mem,
-    nvshmem_put_mem,
+    nvshmem_get_tensor,
+    nvshmem_put_tensor,
 )

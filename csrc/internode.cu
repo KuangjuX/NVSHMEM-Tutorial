@@ -7,7 +7,6 @@ namespace nvshmem_tutorial {
 
 void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
                                   const torch::Tensor& tensor, bool async_op) {
-  // TODO(KuangjuX): Implement this
   if (!tensor.is_cuda()) {
     throw std::runtime_error("internode_all_gather expects CUDA tensor");
   }
@@ -40,13 +39,8 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
                                  cudaMemcpyDeviceToDevice, comm_stream_));
     } else {
       // Internode: RDMA
-      void* local_buf =
-          nvshmem::alloc(tensor.nbytes(), NUM_BUFFER_ALIGNMENT_BYTES);
-      nvshmem::get_mem(local_buf, rdma_buffer_ptr_, tensor.nbytes(), rank);
-      CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(), local_buf,
-                                 tensor.nbytes(), cudaMemcpyDeviceToDevice,
-                                 comm_stream_));
-      nvshmem::free(local_buf);
+      nvshmem::get_mem(tensor_list[rank].data_ptr(), rdma_buffer_ptr_,
+                       tensor.nbytes(), rank);
     }
 
     if (!async_op) {
