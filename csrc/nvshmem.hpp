@@ -49,6 +49,15 @@ inline void init_with_unique_id(const std::vector<int8_t>& unique_id_vec,
 namespace nvshmem_tutorial::nvshmem {
 
 /**
+ * Get the unique id of the current rank.
+ * @return The unique id of the current rank.
+ */
+inline pybind11::bytearray get_local_nvshmem_unique_id() {
+  auto unique_id = get_unique_id();
+  return {reinterpret_cast<const char*>(unique_id.data()), unique_id.size()};
+}
+
+/**
  * Allocate Symmetric memory with NVSHMEM
  * @param size The size of the memory to allocate.
  * @param alignment The alignment of the memory to allocate.

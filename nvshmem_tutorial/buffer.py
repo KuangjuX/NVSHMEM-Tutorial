@@ -55,6 +55,7 @@ class NvshmemBuffer:
         root_unique_id = None
         if self.runtime.get_rdma_rank() > 1:
             os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = 1
+            os.environ["NVSHMEM_DISABLE_P2P"] = "1"
 
             # Synchronize using the root ID.
             nvshmem_unique_ids = [None] * self.group_size
@@ -80,20 +81,3 @@ class NvshmemBuffer:
         if len(tensor_list) != self.group_size:
             raise ValueError("Tensor list must match group size")
         self.runtime.intranode_all_gather(tensor_list, tensor, async_op)
-
-    # def intranode_all_to_all(
-    #     self, input_tensor, output_tensor, input_split_sizes, output_split_sizes
-    # ):
-    #     """Perform intra-node all-to-all communication using NVLink and CUDA IPC."""
-    #     if not input_tensor.is_cuda() or not output_tensor.is_cuda():
-    #         raise ValueError("Input and output must be CUDA tensors")
-    #     if not input_split_sizes.is_cuda() or not output_split_sizes.is_cuda():
-    #         raise ValueError("Split sizes must be CUDA tensors")
-    #     if (
-    #         input_split_sizes.numel() != self.group_size
-    #         or output_split_sizes.numel() != self.group_size
-    #     ):
-    #         raise ValueError("Split sizes must match group size")
-    #     self.runtime.intranode_all_to_all(
-    #         input_tensor, output_tensor, input_split_sizes, output_split_sizes
-    #     )

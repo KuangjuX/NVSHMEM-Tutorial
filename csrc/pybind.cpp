@@ -34,9 +34,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("get_num_nvl_bytes", &Buffer::get_num_nvl_bytes);
 
   // Native API
-  m.def("get_unique_id", &get_unique_id,
+  m.def("get_unique_id", &nvshmem::get_unique_id,
         "Get a unique ID for NVSHMEM initialization (call on rank 0)");
-  m.def("init_with_unique_id", &init_with_unique_id,
+  m.def("init_with_unique_id", &nvshmem::init_with_unique_id,
         "Initialize NVSHMEM using a unique ID", py::arg("unique_id_vec"),
         py::arg("rank"), py::arg("world_size"));
 

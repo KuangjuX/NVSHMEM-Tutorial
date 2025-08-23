@@ -7,7 +7,6 @@ namespace nvshmem_tutorial {
 
 void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
                                   const torch::Tensor& tensor, bool async_op) {
-  // TODO(KuangjuX): Implement this
   if (!tensor.is_cuda()) {
     throw std::runtime_error("internode_all_gather expects CUDA tensor");
   }
