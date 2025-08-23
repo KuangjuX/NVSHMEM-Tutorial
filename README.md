@@ -1,4 +1,4 @@
-## NVSHMEM‑Tutorial: Build a DeepEP‑like GPU Communication Buffer
+# NVSHMEM‑Tutorial: Build a DeepEP‑like GPU Buffer
 
 NVSHMEM‑Tutorial is a hands‑on guide to GPU‑to‑GPU communication with NVSHMEM. By building a simplified, DeepEP‑inspired Buffer, you will learn how to initialize NVSHMEM, allocate symmetric memory, perform one‑sided put/get, implement intra‑/inter‑node collectives, and engineer compute‑communication overlap.
 
