@@ -10,6 +10,8 @@
 
 namespace py = pybind11;
 
+namespace nvshmem_tutorial::nvshmem {
+
 /**
  * Get the unique id of the current process.
  * @return The unique id of the current process.
@@ -44,17 +46,6 @@ inline void init_with_unique_id(const std::vector<int8_t>& unique_id_vec,
   int mype_node = nvshmem_team_my_pe(NVSHMEMX_TEAM_NODE);
   assert(mype_node == rank);
   nvshmem_barrier_all();
-}
-
-namespace nvshmem_tutorial::nvshmem {
-
-/**
- * Get the unique id of the current rank.
- * @return The unique id of the current rank.
- */
-inline pybind11::bytearray get_local_nvshmem_unique_id() {
-  auto unique_id = get_unique_id();
-  return {reinterpret_cast<const char*>(unique_id.data()), unique_id.size()};
 }
 
 /**
