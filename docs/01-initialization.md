@@ -53,3 +53,6 @@ int init(const std::vector<uint8_t> &root_unique_id_val, int rank, int num_ranks
 - `nvshmemx_set_attr_unique_args`: 将进程的身份信息(`rank`，`num_ranks`) 和通信组的标识(`root_unique_id`) 打包到一个属性结构体 `attr` 中。
 - `nvshmemx_init_attr`: 初始化调用，NVSHMEM 运行时使用我们的 unique_id 寻找并连接到其他持有相同 Unique ID 的对等线程。
 - 创建通信子组(Teams)：在一个多节点 GPU 集群中，节点内部的 GPU 通信速度远快于节点间通信。`nvshmem_team_split_strided` 将全局的通信组分割成更小的子组。创建这些基于物理拓扑的 team 后，可以在 Team 内部使用高度优化的、基于 NVLink 设计的集合通信算法。而在 Team 之间使用针对 RDMA 优化的算法。从而实现全局最优的通信性能。
+
+
+在 DeepEP 中的高吞吐模式和低延迟模式采用了不同的初始化方式。

@@ -71,9 +71,6 @@ if __name__ == "__main__":
 
     buffer = NvshmemBuffer(group, rank, world_size, 1024 * 1024, 1024 * 1024)
 
-    if rank == 0:
-        print(f"buffer.group_size = {buffer.group_size}")
-        print(f"buffer.num_nvl_bytes = {buffer.num_nvl_bytes}")
-        print(f"buffer.num_rdma_bytes = {buffer.num_rdma_bytes}")
+    print(f"[DEBUG] Rank {rank} initialized buffer.")
 
     test_internode_allgather(buffer)
