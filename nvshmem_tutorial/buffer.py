@@ -29,8 +29,6 @@ class NvshmemBuffer:
             rank, num_ranks, num_nvl_bytes, num_rdma_bytes
         )
 
-        print(f"[DEBUG] Rank {self.rank} initialized runtime buffer.")
-
         # Synchronize device IDs
         device_ids = [None] * self.group_size
         local_device_id = self.runtime.get_local_device_id()
@@ -80,3 +78,11 @@ class NvshmemBuffer:
         if len(tensor_list) != self.group_size:
             raise ValueError("Tensor list must match group size")
         self.runtime.intranode_all_gather(tensor_list, tensor, async_op)
+
+    def internode_all_gather(self, tensor_list, tensor, async_op=False):
+        """Perform inter-node all-gather communication using NVLink and CUDA IPC."""
+        if not tensor.is_cuda:
+            raise ValueError("Tensor must be CUDA tensor")
+        if len(tensor_list) != self.group_size:
+            raise ValueError("Tensor list must match group size")
+        self.runtime.internode_all_gather(tensor_list, tensor, async_op)

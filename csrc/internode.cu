@@ -23,16 +23,15 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
                              tensor.nbytes(), cudaMemcpyDeviceToDevice,
                              comm_stream_));
   // intranode barrier
-  sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_, comm_stream_);
+  // sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_, comm_stream_);
+  sync::barrier(barrier_signal_ptrs_gpu_, nvl_rank_, NUM_MAX_NVL_PEERS,
+                comm_stream_);
 
   // internode barrier
   nvshmem::barrier();
 
   for (int rank = 0; rank < num_ranks_; ++rank) {
-    // TODO(KuangjuX): Implement this
-    bool is_same_node = true;
-
-    if (is_same_node) {
+    if (is_same_rdma_rank(rank)) {
       // Intranode: CUDA IPC
       CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(),
                                  buffer_ptrs_[rank], tensor.nbytes(),
@@ -42,10 +41,10 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
       nvshmem::get_mem(tensor_list[rank].data_ptr(), rdma_buffer_ptr_,
                        tensor.nbytes(), rank);
     }
+  }
 
-    if (!async_op) {
-      cudaStreamSynchronize(comm_stream_);
-    }
+  if (!async_op) {
+    cudaStreamSynchronize(comm_stream_);
   }
 }
 

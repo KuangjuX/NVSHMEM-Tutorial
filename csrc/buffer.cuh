@@ -67,6 +67,8 @@ class Buffer {
   int get_num_rdma_ranks() const;
   int get_root_rdma_rank(bool global) const;
 
+  bool is_same_rdma_rank(int rank) const;
+
  private:
   // Topology
   int rank_{0};

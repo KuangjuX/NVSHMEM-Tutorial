@@ -48,6 +48,23 @@ def init_dist():
     )
 
 
+def test_internode_allgather(nvshmem_buffer: NvshmemBuffer):
+    """
+    Test internode all-gather communication.
+    """
+    tensor = torch.randn(1024, dtype=torch.float32, device="cuda")
+    tensor_list = [torch.zeros_like(tensor) for _ in range(nvshmem_buffer.group_size)]
+    nvshmem_buffer.internode_all_gather(tensor_list, tensor, async_op=True)
+
+    ref_tensor_list = [torch.zeros_like(tensor) for _ in range(buffer.group_size)]
+    dist.all_gather(ref_tensor_list, tensor, group=dist.group.WORLD)
+
+    for i in range(buffer.group_size):
+        print(f"tensor_list[{i}] = {tensor_list[i]}")
+        print(f"ref_tensor_list[{i}] = {ref_tensor_list[i]}")
+        torch.testing.assert_close(tensor_list[i], ref_tensor_list[i])
+
+
 if __name__ == "__main__":
     rank, world_size, group = init_dist()
     print(f"rank = {rank}, world_size = {world_size}")
@@ -58,3 +75,5 @@ if __name__ == "__main__":
         print(f"buffer.group_size = {buffer.group_size}")
         print(f"buffer.num_nvl_bytes = {buffer.num_nvl_bytes}")
         print(f"buffer.num_rdma_bytes = {buffer.num_rdma_bytes}")
+
+    test_internode_allgather(buffer)
