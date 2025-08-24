@@ -29,8 +29,6 @@ class NvshmemBuffer:
             rank, num_ranks, num_nvl_bytes, num_rdma_bytes
         )
 
-        print(f"[DEBUG] Rank {self.rank} initialized runtime buffer.")
-
         # Synchronize device IDs
         device_ids = [None] * self.group_size
         local_device_id = self.runtime.get_local_device_id()

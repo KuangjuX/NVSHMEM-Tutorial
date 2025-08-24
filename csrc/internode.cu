@@ -24,8 +24,8 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
                              comm_stream_));
   // intranode barrier
   // sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_, comm_stream_);
-  sync::barrier(barrier_signal_ptrs_gpu_, rank_ % NUM_MAX_NVL_PEERS,
-                NUM_MAX_NVL_PEERS, comm_stream_);
+  sync::barrier(barrier_signal_ptrs_gpu_, nvl_rank_, NUM_MAX_NVL_PEERS,
+                comm_stream_);
 
   // internode barrier
   nvshmem::barrier();
