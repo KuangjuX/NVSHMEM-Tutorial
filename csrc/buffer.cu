@@ -228,4 +228,8 @@ int Buffer::get_root_rdma_rank(bool global) const {
   return global ? nvl_rank_ : 0;
 }
 
+bool Buffer::is_same_rdma_rank(int rank) const {
+  return rank / NUM_MAX_NVL_PEERS == rdma_rank_;
+}
+
 }  // namespace nvshmem_tutorial

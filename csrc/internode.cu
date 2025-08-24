@@ -30,9 +30,9 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
 
   for (int rank = 0; rank < num_ranks_; ++rank) {
     // TODO(KuangjuX): Implement this
-    bool is_same_node = true;
+    bool is_same_rdma_rank = is_same_rdma_rank(rank);
 
-    if (is_same_node) {
+    if (is_same_rdma_rank) {
       // Intranode: CUDA IPC
       CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(),
                                  buffer_ptrs_[rank], tensor.nbytes(),
