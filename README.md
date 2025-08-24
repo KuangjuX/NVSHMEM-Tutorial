@@ -9,6 +9,7 @@ DeepEP (by DeepSeek) is a high‑performance communication library for MoE and E
 - `csrc/` — C++/CUDA extension code (NVSHMEM bootstrap, primitives, kernels, bindings)
 - `nvshmem_tutorial/` — Thin Python wrapper exposing `NvshmemBuffer`
 - `tests/` — Unit/integration tests for intra‑ and inter‑node primitives
+- `benchmarks/` — Performance benchmarks for communication primitives and end-to-end workflows
 - `scripts/` — Convenience scripts for launching local multi‑GPU tests
 
 

@@ -15,8 +15,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
   py::class_<Buffer>(m, "Buffer")
       .def(py::init<int, int, int64_t, int64_t>())
-      .def("alloc_symmetric", &Buffer::alloc_symmetric)
-      .def("free_symmetric", &Buffer::free_symmetric)
       .def("get_local_ipc_handle", &Buffer::get_local_ipc_handle)
       .def("get_local_buffer_u8", &Buffer::get_local_buffer_u8)
       .def("sync", &Buffer::sync)
@@ -27,18 +25,23 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       // Introspection
       .def("is_available", &Buffer::is_available)
       .def("get_local_buffer_tensor", &Buffer::get_local_buffer_tensor)
+      .def("get_local_nvshmem_unique_id", &Buffer::get_local_nvshmem_unique_id)
       .def("get_local_pe", &Buffer::get_local_pe)
       .def("get_local_device_id", &Buffer::get_local_device_id)
       .def("get_num_device_sms", &Buffer::get_num_device_sms)
       .def("get_num_local_pes", &Buffer::get_num_local_pes)
-      .def("get_num_nvl_bytes", &Buffer::get_num_nvl_bytes);
+      .def("get_num_nvl_bytes", &Buffer::get_num_nvl_bytes)
+      // RDMA rank
+      .def("get_rdma_rank", &Buffer::get_rdma_rank)
+      .def("get_num_rdma_ranks", &Buffer::get_num_rdma_ranks)
+      .def("get_root_rdma_rank", &Buffer::get_root_rdma_rank);
 
   // Native API
   m.def("get_unique_id", &nvshmem::get_unique_id,
         "Get a unique ID for NVSHMEM initialization (call on rank 0)");
   m.def("init_with_unique_id", &nvshmem::init_with_unique_id,
         "Initialize NVSHMEM using a unique ID", py::arg("unique_id_vec"),
-        py::arg("rank"), py::arg("world_size"));
+        py::arg("rank"), py::arg("world_size"), py::arg("low_latency_mode"));
 
   m.def("nvshmem_alloc_tensor", &nvshmem::alloc_tensor,
         "Allocate Symmetric memory with NVSHMEM", py::arg("size"),
