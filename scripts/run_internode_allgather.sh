@@ -21,11 +21,15 @@ NODE_RANK=$1
 # export NVSHMEM_IB_TRAFFIC_CLASS=160
 # export NVSHMEM_DEBUG_SUBSYS=INIT
 
-# export NCCL_DEBUG=INFO
+# Set unlimited memory limit
+ulimit -l unlimited
+
 export NVSHMEM_DEBUG=INFO
 export NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME=bond1
 export NVSHMEM_SOCKET_IFNAME=bond1
 
+
+# export NCCL_DEBUG=INFO
 # Disable IB/RoCE for NCCL
 export NCCL_IB_DISABLE=1
 # Use bond1 for NCCL
