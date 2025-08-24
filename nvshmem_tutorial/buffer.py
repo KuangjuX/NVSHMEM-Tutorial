@@ -14,9 +14,9 @@ class NvshmemBuffer:
         num_ranks: int,
         num_nvl_bytes: int,
         num_rdma_bytes: int,
+        low_latency_mode: bool = False,
     ):
         """Initialize the NVSHMEM buffer."""
-        # os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "none"
 
         self.group = group
         self.group_size = group.size()
@@ -53,18 +53,25 @@ class NvshmemBuffer:
         dist.all_gather_object(ipc_handles, local_ipc_handle, group)
 
         root_unique_id = None
-        if self.runtime.get_rdma_rank() > 1:
+        if self.runtime.get_rdma_rank() > 1 or low_latency_mode:
             os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = 1
             os.environ["NVSHMEM_DISABLE_P2P"] = "1"
+            os.environ["NVSHMEM_MAX_TEAMS"] = "7"
+            os.environ["NVSHMEM_DISABLE_NVLS"] = "1"
 
             # Synchronize using the root ID.
             nvshmem_unique_ids = [None] * self.group_size
-            if self.runtime.get_rdma_rank() == 0:
+            if (low_latency_mode and self.rank == 0) or (
+                not low_latency_mode and self.runtime.get_rdma_rank() == 0
+            ):
                 root_unique_id = self.runtime.get_local_nvshmem_unique_id()
             dist.all_gather_object(nvshmem_unique_ids, root_unique_id, group)
-            root_unique_id = nvshmem_unique_ids[self.runtime.get_root_rdma_rank(True)]
+            root_unique_id = nvshmem_unique_ids[
+                0 if low_latency_mode else self.runtime.get_root_rdma_rank(True)
+            ]
 
         self.runtime.sync(device_ids, ipc_handles, root_unique_id)
+        print(f"[Rank {self.rank}] NVSHMEM initialized successfully.")
 
     def __del__(self):
         self.runtime.destroy()

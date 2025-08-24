@@ -45,6 +45,7 @@ if __name__ == "__main__":
     num_local_ranks = 8
 
     rank, world_size, group = init_dist(local_rank, num_local_ranks)
+    print(f"rank = {rank}, world_size = {world_size}")
 
     buffer = NvshmemBuffer(group, rank, world_size, 1024 * 1024, 1024 * 1024)
 
