@@ -11,24 +11,32 @@ from nvshmem_tutorial import NvshmemBuffer
 import torch.distributed as dist
 
 
-def init_dist(local_rank: int, num_local_ranks: int):
+def init_dist():
     # NOTES: you may rewrite this function with your own cluster settings
     ip = os.getenv("MASTER_ADDR", "127.0.0.1")
     port = int(os.getenv("MASTER_PORT", "8361"))
-    num_nodes = int(os.getenv("WORLD_SIZE", 1))
-    node_rank = int(os.getenv("RANK", 0))
+    local_rank = int(os.getenv("LOCAL_RANK", 0))
+    world_size = int(os.getenv("WORLD_SIZE", 1))
+    rank = int(os.getenv("RANK", 0))
 
-    sig = inspect.signature(dist.init_process_group)
+    print(f"ip = {ip}, port = {port}, world_size = {world_size}, rank = {rank}")
+
+    # sig 用于获取 dist.init_process_group 函数的签名信息
+    # 通过检查函数签名中是否包含 "device_id" 参数，来判断当前 PyTorch 版本是否支持该参数
+    # 这样做是为了保证代码在不同版本的 PyTorch 中都能正常运行
+    # sig = inspect.signature(dist.init_process_group)
     params = {
         "backend": "nccl",
         "init_method": f"tcp://{ip}:{port}",
-        "world_size": num_nodes * num_local_ranks,
-        "rank": node_rank * num_local_ranks + local_rank,
+        "world_size": world_size,
+        "rank": rank,
     }
-    if "device_id" in sig.parameters:
-        # noinspection PyTypeChecker
-        params["device_id"] = torch.device(f"cuda:{local_rank}")
+    # if "device_id" in sig.parameters:
+    #     # noinspection PyTypeChecker
+    #     params["device_id"] = torch.device(f"cuda:{local_rank}")
     dist.init_process_group(**params)
+
+    print(f"Rank {local_rank} initialized successfully.")
     torch.set_default_dtype(torch.bfloat16)
     torch.set_default_device("cuda")
     torch.cuda.set_device(local_rank)
@@ -36,15 +44,12 @@ def init_dist(local_rank: int, num_local_ranks: int):
     return (
         dist.get_rank(),
         dist.get_world_size(),
-        dist.new_group(list(range(num_local_ranks * num_nodes))),
+        dist.new_group(list(range(world_size))),
     )
 
 
 if __name__ == "__main__":
-    local_rank = int(os.environ["LOCAL_RANK"])
-    num_local_ranks = 8
-
-    rank, world_size, group = init_dist(local_rank, num_local_ranks)
+    rank, world_size, group = init_dist()
     print(f"rank = {rank}, world_size = {world_size}")
 
     buffer = NvshmemBuffer(group, rank, world_size, 1024 * 1024, 1024 * 1024)

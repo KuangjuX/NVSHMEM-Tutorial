@@ -49,6 +49,8 @@ class Buffer {
   torch::Tensor get_local_buffer_tensor(const py::object& dtype, int64_t offset,
                                         bool use_rdma_buffer) const;
 
+  py::bytearray get_local_nvshmem_unique_id() const;
+
   // Lifecycle
   void destroy();
 
@@ -62,6 +64,7 @@ class Buffer {
   int get_num_device_sms() const;
 
   int get_rdma_rank() const;
+  int get_num_rdma_ranks() const;
   int get_root_rdma_rank(bool global) const;
 
  private:

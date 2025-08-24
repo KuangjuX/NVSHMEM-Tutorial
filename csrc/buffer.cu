@@ -133,9 +133,9 @@ void Buffer::sync(
                 root_unique_id_opt->size());
     auto nvshmem_rank = low_latency_mode_ ? rank_ : rdma_rank_;
     auto num_nvshmem_ranks = low_latency_mode_ ? num_ranks_ : num_rdma_ranks_;
-    HOST_ASSERT(init_with_unique_id(root_unique_id, nvshmem_rank,
-                                    num_nvshmem_ranks,
-                                    low_latency_mode_) == nvshmem_rank);
+    HOST_ASSERT(nvshmem::init_with_unique_id(
+                    root_unique_id, nvshmem_rank, num_nvshmem_ranks,
+                    low_latency_mode_) == nvshmem_rank);
 
     // Barrier
     nvshmem::barrier();
@@ -189,6 +189,11 @@ torch::Tensor Buffer::get_local_buffer_tensor(const py::object& dtype,
       torch::TensorOptions().dtype(scalar_type).device(torch::kCUDA));
 }
 
+pybind11::bytearray Buffer::get_local_nvshmem_unique_id() const {
+  auto unique_id = nvshmem::get_unique_id();
+  return {reinterpret_cast<const char*>(unique_id.data()), unique_id.size()};
+}
+
 void Buffer::destroy() {
   CUDA_CHECK(cudaDeviceSynchronize());
   // Close CUDA IPC
@@ -218,6 +223,7 @@ int64_t Buffer::get_num_nvl_bytes() const { return num_nvl_bytes_; }
 int Buffer::get_num_device_sms() const { return num_device_sms_; }
 
 int Buffer::get_rdma_rank() const { return rdma_rank_; }
+int Buffer::get_num_rdma_ranks() const { return num_rdma_ranks_; }
 int Buffer::get_root_rdma_rank(bool global) const {
   return global ? nvl_rank_ : 0;
 }

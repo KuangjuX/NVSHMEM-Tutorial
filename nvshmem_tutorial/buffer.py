@@ -25,22 +25,11 @@ class NvshmemBuffer:
         self.num_nvl_bytes = num_nvl_bytes
         self.num_rdma_bytes = num_rdma_bytes
 
-        # Initialize nvshmem with unique id
-        if rank == 0:
-            unique_id = nvshmem_runtime.get_unique_id()
-        else:
-            unique_id = None
-
-        unique_ids = [None] * num_ranks
-        dist.all_gather_object(unique_ids, unique_id, group=dist.group.WORLD)
-        nvshmem_runtime.init_with_unique_id(unique_ids[0], rank, num_ranks)
-
-        print(f"[Rank {rank}] NVSHMEM initialized successfully.")
-        dist.barrier()
-
         self.runtime = nvshmem_runtime.Buffer(
             rank, num_ranks, num_nvl_bytes, num_rdma_bytes
         )
+
+        print(f"[DEBUG] Rank {self.rank} initialized runtime buffer.")
 
         # Synchronize device IDs
         device_ids = [None] * self.group_size
@@ -53,8 +42,8 @@ class NvshmemBuffer:
         dist.all_gather_object(ipc_handles, local_ipc_handle, group)
 
         root_unique_id = None
-        if self.runtime.get_rdma_rank() > 1 or low_latency_mode:
-            os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = 1
+        if self.runtime.get_num_rdma_ranks() > 1 or low_latency_mode:
+            os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = "1"
             os.environ["NVSHMEM_DISABLE_P2P"] = "1"
             os.environ["NVSHMEM_MAX_TEAMS"] = "7"
             os.environ["NVSHMEM_DISABLE_NVLS"] = "1"
@@ -65,13 +54,16 @@ class NvshmemBuffer:
                 not low_latency_mode and self.runtime.get_rdma_rank() == 0
             ):
                 root_unique_id = self.runtime.get_local_nvshmem_unique_id()
+
             dist.all_gather_object(nvshmem_unique_ids, root_unique_id, group)
             root_unique_id = nvshmem_unique_ids[
                 0 if low_latency_mode else self.runtime.get_root_rdma_rank(True)
             ]
 
+        if root_unique_id is None:
+            raise RuntimeError(f"Rank {self.rank} Root unique ID is None")
+
         self.runtime.sync(device_ids, ipc_handles, root_unique_id)
-        print(f"[Rank {self.rank}] NVSHMEM initialized successfully.")
 
     def __del__(self):
         self.runtime.destroy()
