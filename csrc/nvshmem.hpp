@@ -16,13 +16,13 @@ namespace nvshmem_tutorial::nvshmem {
  * Get the unique id of the current process.
  * @return The unique id of the current process.
  */
-inline std::vector<int8_t> get_unique_id() {
+inline std::vector<uint8_t> get_unique_id() {
   nvshmemx_uniqueid_t unique_id;
   nvshmemx_get_uniqueid(&unique_id);
 
-  // Convert the unique_id to a vector of int8_t
-  const int8_t* id_ptr = reinterpret_cast<const int8_t*>(&unique_id);
-  return std::vector<int8_t>(id_ptr, id_ptr + sizeof(unique_id));
+  std::vector<uint8_t> result(sizeof(unique_id));
+  std::memcpy(result.data(), &unique_id, sizeof(nvshmemx_uniqueid_t));
+  return result;
 }
 
 /**
@@ -31,21 +31,33 @@ inline std::vector<int8_t> get_unique_id() {
  * @param rank The rank of the current process.
  * @param num_ranks The number of ranks in the current process group.
  */
-inline void init_with_unique_id(const std::vector<int8_t>& unique_id_vec,
-                                int rank, int num_ranks) {
+inline int init_with_unique_id(const std::vector<uint8_t>& unique_id_vec,
+                               int rank, int num_ranks,
+                               bool low_latency_mode = false) {
   if (unique_id_vec.size() != sizeof(nvshmemx_uniqueid_t)) {
     throw std::runtime_error("unique_id_vec size mismatch");
   }
-  // Convert vector<int8_t> back to nvshmemx_uniqueid_t
-  nvshmemx_uniqueid_t unique_id = NVSHMEMX_UNIQUEID_INITIALIZER;
-  memcpy(&unique_id, unique_id_vec.data(), sizeof(unique_id));
 
-  nvshmemx_init_attr_t attr = NVSHMEMX_INIT_ATTR_INITIALIZER;
-  nvshmemx_set_attr_uniqueid_args(rank, num_ranks, &unique_id, &attr);
+  nvshmemx_uniqueid_t root_unique_id;
+  nvshmemx_init_attr_t attr;
+  std::memcpy(&root_unique_id, unique_id_vec.data(),
+              sizeof(nvshmemx_uniqueid_t));
+  nvshmemx_set_attr_uniqueid_args(rank, num_ranks, &root_unique_id, &attr);
   nvshmemx_init_attr(NVSHMEMX_INIT_WITH_UNIQUEID, &attr);
-  int mype_node = nvshmem_team_my_pe(NVSHMEMX_TEAM_NODE);
-  assert(mype_node == rank);
+
+  // Create sub-RDMA teams
+  if (low_latency_mode and num_ranks > NUM_MAX_NVL_PEERS) {
+    nvshmem_team_t cpu_rdma_team = NVSHMEM_TEAM_INVALID;
+    nvshmem_team_config_t cpu_rdma_team_config;
+    HOST_ASSERT(nvshmem_team_split_strided(
+                    NVSHMEM_TEAM_WORLD, rank % NUM_MAX_NVL_PEERS,
+                    NUM_MAX_NVL_PEERS, num_ranks / NUM_MAX_NVL_PEERS,
+                    &cpu_rdma_team_config, 0, &cpu_rdma_team) == 0);
+    HOST_ASSERT(cpu_rdma_team != NVSHMEM_TEAM_INVALID);
+  }
+
   nvshmem_barrier_all();
+  return nvshmem_my_pe();
 }
 
 /**

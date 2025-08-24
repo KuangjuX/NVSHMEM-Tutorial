@@ -62,7 +62,7 @@ class NvshmemBuffer:
             if self.runtime.get_rdma_rank() == 0:
                 root_unique_id = self.runtime.get_local_nvshmem_unique_id()
             dist.all_gather_object(nvshmem_unique_ids, root_unique_id, group)
-            root_unique_id = nvshmem_unique_ids[self.runtime.get_rdma_rank()]
+            root_unique_id = nvshmem_unique_ids[self.runtime.get_root_rdma_rank(True)]
 
         self.runtime.sync(device_ids, ipc_handles, root_unique_id)
 

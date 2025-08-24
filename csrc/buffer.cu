@@ -81,27 +81,6 @@ Buffer::~Buffer() {
   }
 }
 
-torch::Tensor Buffer::alloc_symmetric(int64_t size_bytes) {
-  void* ptr = nvshmem_malloc(size_bytes);
-  if (ptr == nullptr) {
-    throw std::runtime_error("nvshmem_malloc returned nullptr");
-  }
-  return torch::from_blob(ptr, {size_bytes},
-                          torch::dtype(torch::kUInt8).device(torch::kCUDA));
-}
-
-void Buffer::free_symmetric(torch::Tensor t) { nvshmem_free(t.data_ptr()); }
-
-// py::bytearray Buffer::get_local_nvshmem_unique_id() const {
-//   // Mimic DeepEP: only RDMA root (rdma_rank==0) allowed to export unique id
-//   if (rdma_rank_ != 0) {
-//     throw std::runtime_error("Only RDMA rank 0 can get NVSHMEM unique ID");
-//   }
-//   auto uid = get_unique_id();
-//   return py::bytearray(reinterpret_cast<const char*>(uid.data()),
-//   uid.size());
-// }
-
 void Buffer::sync(
     const std::vector<int>& device_ids,
     const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
@@ -142,18 +121,21 @@ void Buffer::sync(
     CUDA_CHECK(cudaDeviceSynchronize());
   }
 
-#ifdef ENABLE_NVSHMEM
   // Initialize NVSHMEM and allocate RDMA buffer
   if (num_rdma_bytes_ > 0) {
     if (!root_unique_id_opt.has_value()) {
       throw std::runtime_error("sync: missing root NVSHMEM unique id");
     }
-    auto uid_str = root_unique_id_opt->cast<std::string>();
-    std::vector<int8_t> uid_vec(uid_str.begin(), uid_str.end());
 
-    int nvshmem_rank = rdma_rank_;
-    int nvshmem_world = num_rdma_ranks_;
-    init_with_unique_id(uid_vec, nvshmem_rank, nvshmem_world);
+    std::vector<uint8_t> root_unique_id(root_unique_id_opt->size());
+    auto root_unique_id_str = root_unique_id_opt->cast<std::string>();
+    std::memcpy(root_unique_id.data(), root_unique_id_str.c_str(),
+                root_unique_id_opt->size());
+    auto nvshmem_rank = low_latency_mode_ ? rank_ : rdma_rank_;
+    auto num_nvshmem_ranks = low_latency_mode_ ? num_ranks_ : num_rdma_ranks_;
+    HOST_ASSERT(init_with_unique_id(root_unique_id, nvshmem_rank,
+                                    num_nvshmem_ranks,
+                                    low_latency_mode_) == nvshmem_rank);
 
     // Barrier
     nvshmem::barrier();
@@ -166,8 +148,8 @@ void Buffer::sync(
 
     // Barrier
     nvshmem::barrier();
+    CUDA_CHECK(cudaDeviceSynchronize());
   }
-#endif
 
   available_ = true;
 }
@@ -234,4 +216,10 @@ int Buffer::get_num_local_pes() const { return num_local_pes_; }
 int Buffer::get_local_device_id() const { return device_id_; }
 int64_t Buffer::get_num_nvl_bytes() const { return num_nvl_bytes_; }
 int Buffer::get_num_device_sms() const { return num_device_sms_; }
+
+int Buffer::get_rdma_rank() const { return rdma_rank_; }
+int Buffer::get_root_rdma_rank(bool global) const {
+  return global ? nvl_rank_ : 0;
+}
+
 }  // namespace nvshmem_tutorial

@@ -35,7 +35,8 @@
         "__hash_table": "cpp",
         "deque": "cpp",
         "forward_list": "cpp",
-        "unordered_map": "cpp"
+        "unordered_map": "cpp",
+        "optional": "cpp"
     },
 
     "[python]": {

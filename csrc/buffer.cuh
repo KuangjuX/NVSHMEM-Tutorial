@@ -23,14 +23,6 @@ class Buffer {
 
   ~Buffer();
 
-  // Allocate Symmetric Memory.
-  torch::Tensor alloc_symmetric(int64_t size_bytes);
-
-  // Free Symmetric Memory.
-  void free_symmetric(torch::Tensor t);
-
-  // py::bytearray get_local_nvshmem_unique_id() const;
-
   void sync(
       const std::vector<int>& device_ids,
       const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
@@ -69,6 +61,9 @@ class Buffer {
 
   int get_num_device_sms() const;
 
+  int get_rdma_rank() const;
+  int get_root_rdma_rank(bool global) const;
+
  private:
   // Topology
   int rank_{0};
@@ -102,6 +97,8 @@ class Buffer {
 
   bool local_allocated_{false};
   bool available_{false};
+
+  bool low_latency_mode_{false};
 
   at::cuda::CUDAStream comm_stream_;
 };
