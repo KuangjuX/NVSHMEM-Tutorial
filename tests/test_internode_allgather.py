@@ -24,16 +24,16 @@ def init_dist():
     # sig 用于获取 dist.init_process_group 函数的签名信息
     # 通过检查函数签名中是否包含 "device_id" 参数，来判断当前 PyTorch 版本是否支持该参数
     # 这样做是为了保证代码在不同版本的 PyTorch 中都能正常运行
-    # sig = inspect.signature(dist.init_process_group)
+    sig = inspect.signature(dist.init_process_group)
     params = {
         "backend": "nccl",
         "init_method": f"tcp://{ip}:{port}",
         "world_size": world_size,
         "rank": rank,
     }
-    # if "device_id" in sig.parameters:
-    #     # noinspection PyTypeChecker
-    #     params["device_id"] = torch.device(f"cuda:{local_rank}")
+    if "device_id" in sig.parameters:
+        # noinspection PyTypeChecker
+        params["device_id"] = torch.device(f"cuda:{local_rank}")
     dist.init_process_group(**params)
 
     print(f"Rank {local_rank} initialized successfully.")
@@ -54,15 +54,18 @@ def test_internode_allgather(nvshmem_buffer: NvshmemBuffer):
     """
     tensor = torch.randn(1024, dtype=torch.float32, device="cuda")
     tensor_list = [torch.zeros_like(tensor) for _ in range(nvshmem_buffer.group_size)]
-    nvshmem_buffer.internode_all_gather(tensor_list, tensor, async_op=True)
+    nvshmem_buffer.internode_all_gather(tensor_list, tensor, async_op=False)
 
     ref_tensor_list = [torch.zeros_like(tensor) for _ in range(buffer.group_size)]
     dist.all_gather(ref_tensor_list, tensor, group=dist.group.WORLD)
 
-    for i in range(buffer.group_size):
-        print(f"tensor_list[{i}] = {tensor_list[i]}")
-        print(f"ref_tensor_list[{i}] = {ref_tensor_list[i]}")
-        torch.testing.assert_close(tensor_list[i], ref_tensor_list[i])
+    env_rank = int(os.getenv("RANK", 0))
+
+    if env_rank == 0:
+        for i in range(buffer.group_size):
+            print(f"tensor_list[{i}] = {tensor_list[i]}")
+            print(f"ref_tensor_list[{i}] = {ref_tensor_list[i]}")
+            torch.testing.assert_close(tensor_list[i], ref_tensor_list[i])
 
 
 if __name__ == "__main__":

@@ -49,7 +49,7 @@ setup(
                 "csrc/buffer.cu",
                 "csrc/intranode.cu",
                 "csrc/internode.cu",
-                "csrc/pybind.cpp",
+                "csrc/pybind.cu",
             ],
             include_dirs=include_dirs,
             library_dirs=library_dirs,

@@ -34,12 +34,13 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
     if (is_same_rdma_rank(rank)) {
       // Intranode: CUDA IPC
       CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(),
-                                 buffer_ptrs_[rank], tensor.nbytes(),
+                                 buffer_ptrs_[nvl_rank_], tensor.nbytes(),
                                  cudaMemcpyDeviceToDevice, comm_stream_));
     } else {
       // Internode: RDMA
-      nvshmem::get_mem(tensor_list[rank].data_ptr(), rdma_buffer_ptr_,
-                       tensor.nbytes(), rank);
+      // nvshmem::get_mem(tensor_list[rank].data_ptr(), rdma_buffer_ptr_,
+      //                  tensor.nbytes(), rank);
+      continue;
     }
   }
 

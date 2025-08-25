@@ -9,31 +9,21 @@ fi
 
 NODE_RANK=$1
 
-# export NCCL_SOCKET_IFNAME=bond1
-# export NCCL_IB_DISABLE=0
-# export NCCL_IB_GID_INDEX=3
-# export NCCL_IB_HCA=mlx5_bond_1:1,mlx5_bond_2:1,mlx5_bond_3:1,mlx5_bond_4:1,mlx5_bond_5:1,mlx5_bond_6:1,mlx5_bond_7:1,mlx5_bond_8:1
-# export GLOO_SOCKET_IFNAME=bond1
-# export NCCL_IB_QPS_PER_CONNECTION=4
-# export NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME=bond1
-# export NVSHMEM_HCA_LIST=mlx5_bond_1:1,mlx5_bond_2:1,mlx5_bond_3:1,mlx5_bond_4:1,mlx5_bond_5:1,mlx5_bond_6:1,mlx5_bond_7:1,mlx5_bond_8:1
-# export NCCL_IB_TC=160
-# export NVSHMEM_IB_TRAFFIC_CLASS=160
-# export NVSHMEM_DEBUG_SUBSYS=INIT
-
 # Set unlimited memory limit
 ulimit -l unlimited
 
-export NVSHMEM_DEBUG=INFO
-export NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME=bond1
-export NVSHMEM_SOCKET_IFNAME=bond1
+export NVSHMEM_DEBUG=WARN
+# export NCCL_DEBUG=WARN
 
-
-# export NCCL_DEBUG=INFO
-# Disable IB/RoCE for NCCL
-export NCCL_IB_DISABLE=1
-# Use bond1 for NCCL
 export NCCL_SOCKET_IFNAME=bond1
+export NCCL_IB_DISABLE=0
+export NCCL_IB_GID_INDEX=3
+export NCCL_IB_HCA=mlx5_bond_1:1,mlx5_bond_2:1,mlx5_bond_3:1,mlx5_bond_4:1,mlx5_bond_5:1,mlx5_bond_6:1,mlx5_bond_7:1,mlx5_bond_8:1
+export NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME=bond1
+export NVSHMEM_HCA_LIST=mlx5_bond_1:1,mlx5_bond_2:1,mlx5_bond_3:1,mlx5_bond_4:1,mlx5_bond_5:1,mlx5_bond_6:1,mlx5_bond_7:1,mlx5_bond_8:1
+export NCCL_IB_TC=160
+export NVSHMEM_IB_TRAFFIC_CLASS=160
+
 
 # MASTER_ADDR and MASTER_PORT are expected to be set as environment variables on the server
 : "${MASTER_ADDR:?Need to set MASTER_ADDR}"
