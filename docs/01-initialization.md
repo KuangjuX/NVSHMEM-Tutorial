@@ -65,3 +65,6 @@ NVSHMEM Team 是处理单元的一个有序子集，想象一下整个程序有 
 - 提高性能和减少同步开销：在 `NVSHMEM_TEAM_WORLD` 上执行一个同步操作。例如 `nvshmem_barrier_all` 需要所有 PE 都参与同步，这是一个全局同步点，开销很大；如果程序逻辑只需要一小部分 PEs 同步，那么在一个只包含这些 PEs 的 `Team` 上执行 `nvshmem_barrier_on_team` 会快得多。
 
 在 DeepEP 中的高吞吐模式和低延迟模式采用了不同的初始化方式。
+
+- 高吞吐模式：为 `rdma_rank == 0` 的所有 GPU 生成 unique_id，并广播到其他 rdma_rank，使用 `rdma_rank` 和 `num_rdma_ranks` 进行初始化。
+- 低延迟模式：仅仅为 `rank == 0` 的 GPU 生成 unique_id，广播到其他 rank，初始化后紧接着调用 `nvshmem_team_split_strided`。
