@@ -54,5 +54,14 @@ int init(const std::vector<uint8_t> &root_unique_id_val, int rank, int num_ranks
 - `nvshmemx_init_attr`: 初始化调用，NVSHMEM 运行时使用我们的 unique_id 寻找并连接到其他持有相同 Unique ID 的对等线程。
 - 创建通信子组(Teams)：在一个多节点 GPU 集群中，节点内部的 GPU 通信速度远快于节点间通信。`nvshmem_team_split_strided` 将全局的通信组分割成更小的子组。创建这些基于物理拓扑的 team 后，可以在 Team 内部使用高度优化的、基于 NVLink 设计的集合通信算法。而在 Team 之间使用针对 RDMA 优化的算法。从而实现全局最优的通信性能。
 
+## NVSHMEM Team
+
+NVSHMEM Team 是处理单元的一个有序子集，想象一下整个程序有 16 个 GPUs，它们的全局 Rank 是 0 到 15。这是一个大的、默认的通信组，在 NVSHMEM 被称为 `NVSHMEM_TEAM_WORLD`。在每个 `Team` 内部，成员们都有一个新的、从 0 开始的本地 Rank，并且这个 `Team` 有自己的大小，这使得这个子集内部通信非常方便。
+
+使用 NVSHMEM TEAM 的原因：
+
+- 匹配硬件拓扑
+- 实现算法分区：模型的不同层分布在不同的 GPU 组上，每一层可以是一个 `Team`，层内的 GPU 协同计算，层间的 GPU 完成数据传递。
+- 提高性能和减少同步开销：在 `NVSHMEM_TEAM_WORLD` 上执行一个同步操作。例如 `nvshmem_barrier_all` 需要所有 PE 都参与同步，这是一个全局同步点，开销很大；如果程序逻辑只需要一小部分 PEs 同步，那么在一个只包含这些 PEs 的 `Team` 上执行 `nvshmem_barrier_on_team` 会快得多。
 
 在 DeepEP 中的高吞吐模式和低延迟模式采用了不同的初始化方式。
