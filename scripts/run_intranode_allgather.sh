@@ -10,4 +10,5 @@ NPROC_PER_NODE=$1
 
 torchrun \
     --nproc_per_node=$NPROC_PER_NODE \
-    tests/test_intranode_comm.py
+    tests/test_intranode_allgather.py
+    

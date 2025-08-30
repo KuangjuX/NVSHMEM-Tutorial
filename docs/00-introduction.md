@@ -6,7 +6,7 @@ NVSHMEM(NVIDIA SHared MEMory) 是一个基于 OpenSHMEM 标准的并行编程库
 
 NVSHMEM 的特性:
 - 单边通信：与传统 MPI 双边通信的最本质区别。在 NVSHMEM 中，一个 GPU 可以直接对另一个 GPU 的内存进行读写，无需目标 GPU 进行任何匹配操作，减少同步开销和通信延迟。
-- GPU 原生通信：可以直接在 CUADA kernel 内部发起，消除了 CPU-GPU 上下文切换，实现了计算与通信的重叠。
+- GPU 原生通信：可以直接在 CUDA kernel 内部发起，消除了 CPU-GPU 上下文切换，实现了计算与通信的重叠。
 - 硬件卸载：NVSHMEM 可以直接卸载到硬件执行。通过 NVLink 和 RDMA，数据传输可以绕过 CPU 和内核，直接在 GPU 网络接口和内存控制器进行。
 
 ## Memory Model

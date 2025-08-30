@@ -21,24 +21,32 @@ def get_nvl_rank(rank: int):
     return rank % 8
 
 
-def init_dist(local_rank: int, num_local_ranks: int):
+def init_dist():
     # NOTES: you may rewrite this function with your own cluster settings
     ip = os.getenv("MASTER_ADDR", "127.0.0.1")
     port = int(os.getenv("MASTER_PORT", "8361"))
-    num_nodes = int(os.getenv("WORLD_SIZE", 1))
-    node_rank = int(os.getenv("RANK", 0))
+    local_rank = int(os.getenv("LOCAL_RANK", 0))
+    world_size = int(os.getenv("WORLD_SIZE", 1))
+    rank = int(os.getenv("RANK", 0))
 
+    print(f"ip = {ip}, port = {port}, world_size = {world_size}, rank = {rank}")
+
+    # sig 用于获取 dist.init_process_group 函数的签名信息
+    # 通过检查函数签名中是否包含 "device_id" 参数，来判断当前 PyTorch 版本是否支持该参数
+    # 这样做是为了保证代码在不同版本的 PyTorch 中都能正常运行
     sig = inspect.signature(dist.init_process_group)
     params = {
         "backend": "nccl",
         "init_method": f"tcp://{ip}:{port}",
-        "world_size": num_nodes * num_local_ranks,
-        "rank": node_rank * num_local_ranks + local_rank,
+        "world_size": world_size,
+        "rank": rank,
     }
     if "device_id" in sig.parameters:
         # noinspection PyTypeChecker
         params["device_id"] = torch.device(f"cuda:{local_rank}")
     dist.init_process_group(**params)
+
+    print(f"Rank {local_rank} initialized successfully.")
     torch.set_default_dtype(torch.bfloat16)
     torch.set_default_device("cuda")
     torch.cuda.set_device(local_rank)
@@ -46,7 +54,7 @@ def init_dist(local_rank: int, num_local_ranks: int):
     return (
         dist.get_rank(),
         dist.get_world_size(),
-        dist.new_group(list(range(num_local_ranks * num_nodes))),
+        dist.new_group(list(range(world_size))),
     )
 
 
@@ -57,10 +65,9 @@ def init_nvshmem():
     # CRITICAL CHANGE: Enable UCX for network transport
     # 'ucx' is the recommended transport for InfiniBand/RoCE and high-speed Ethernet.
     # os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "ucx"
-    os.environ["NVSHMEM_DISABLE_P2P"] = "1"
+    # os.environ["NVSHMEM_DISABLE_P2P"] = "1"
     os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = "1"
-    os.environ["NVSHMEM_MAX_TEAMS"] = "7"
-    os.environ["NVSHMEM_DEBUG"] = "INFO"
+    # os.environ["NVSHMEM_MAX_TEAMS"] = "7"
 
     # These are set by the torchrun launcher
     rank = int(os.environ["RANK"])
@@ -73,10 +80,9 @@ def init_nvshmem():
 
     # torch.distributed is used for bootstrapping NVSHMEM's connection info
     # dist.init_process_group(backend="gloo")
-    rank, world_size, group = init_dist(local_rank, 8)
+    rank, world_size, group = init_dist()
 
-    # Rank 0 creates a unique ID and broadcasts it to all other ranks
-    if get_rdma_rank(rank) == 0:
+    if rank == 0:
         unique_id = get_unique_id()
     else:
         unique_id = None
@@ -87,28 +93,26 @@ def init_nvshmem():
     print(f"[Node {node_rank}, Rank {rank}] all gather object.")
 
     # All ranks now have the same unique_id from rank 0
-    init_with_unique_id(nvshmem_unique_ids[get_nvl_rank(rank)], rank, world_size)
+    init_with_unique_id(nvshmem_unique_ids[0], rank, world_size, False)
 
     print(f"[Node {node_rank}, Rank {rank}] NVSHMEM initialized successfully.")
     dist.barrier()
     return rank, world_size, local_rank, node_rank
 
 
-def run_inter_node_test(rank, world_size, node_rank, size_bytes=1024):
+def run_inter_node_test(rank, size_bytes=1024):
     """
     Performs a put/get operation between two ranks on different nodes.
     """
-    if world_size < 2 or os.environ.get("NNODES", "1") == "1":
-        if rank == 0:
-            print("Skipping inter-node test: requires at least 2 nodes.")
-        return
 
     # --- Test 1: PUT from Node 0 to Node 1 ---
 
     # Define producer (on node 0) and consumer (on node 1)
     # This ensures we are testing cross-node communication
     producer_pe = 0
-    consumer_pe = world_size // 2  # e.g., rank 8 in a 16-GPU setup
+    consumer_pe = 16 // 2  # e.g., rank 8 in a 16-GPU setup
+
+    # consumer_pe = 1
 
     if rank == 0:
         print("\n--- Running Inter-Node PUT Test ---")
@@ -116,7 +120,7 @@ def run_inter_node_test(rank, world_size, node_rank, size_bytes=1024):
         print(f"Consumer: Rank {consumer_pe} (on Node 1)")
 
     # All PEs allocate a symmetric buffer
-    buffer = nvshmem_alloc_tensor((size_bytes,), dtype=torch.uint8)
+    buffer = nvshmem_alloc_tensor(size_bytes, 128)
     nvshmem_barrier()
 
     # Producer (rank 0) creates data and PUTs it to the consumer's buffer
@@ -125,7 +129,7 @@ def run_inter_node_test(rank, world_size, node_rank, size_bytes=1024):
             (size_bytes,), fill_value=42, dtype=torch.uint8, device="cuda"
         )
         print(f"[Rank {rank}] Putting tensor to Rank {consumer_pe}'s buffer...")
-        nvshmem_put_tensor(buffer, local_tensor, consumer_pe)
+        nvshmem_put_tensor(buffer, local_tensor, size_bytes, consumer_pe)
 
     # Barrier ensures the PUT is complete before the consumer tries to read it
     nvshmem_barrier()
@@ -153,8 +157,11 @@ def run_inter_node_test(rank, world_size, node_rank, size_bytes=1024):
 def main():
     rank, world_size, local_rank, node_rank = init_nvshmem()
 
+    if rank == 0:
+        print("WORLD_SIZE = ", world_size)
+
     # Run the specific inter-node test
-    run_inter_node_test(rank, world_size, node_rank)
+    run_inter_node_test(rank)
 
     dist.barrier()
     if rank == 0:
