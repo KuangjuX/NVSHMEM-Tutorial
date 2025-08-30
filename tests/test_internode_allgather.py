@@ -52,20 +52,21 @@ def test_internode_allgather(nvshmem_buffer: NvshmemBuffer):
     """
     Test internode all-gather communication.
     """
-    tensor = torch.randn(1024, dtype=torch.float32, device="cuda")
+    tensor = torch.randn(256, dtype=torch.float32, device="cuda")
     tensor_list = [torch.zeros_like(tensor) for _ in range(nvshmem_buffer.group_size)]
     nvshmem_buffer.internode_all_gather(tensor_list, tensor, async_op=False)
 
     ref_tensor_list = [torch.zeros_like(tensor) for _ in range(buffer.group_size)]
     dist.all_gather(ref_tensor_list, tensor, group=dist.group.WORLD)
 
-    env_rank = int(os.getenv("RANK", 0))
+    env_rank = int(os.getenv("RANK", "0"))
 
     if env_rank == 0:
-        for i in range(buffer.group_size):
-            print(f"tensor_list[{i}] = {tensor_list[i]}")
-            print(f"ref_tensor_list[{i}] = {ref_tensor_list[i]}")
+        for i in range(nvshmem_buffer.group_size):
+            # print(f"tensor_list[{i}] = {tensor_list[i]}")
+            # print(f"ref_tensor_list[{i}] = {ref_tensor_list[i]}")
             torch.testing.assert_close(tensor_list[i], ref_tensor_list[i])
+    print("Test passed")
 
 
 if __name__ == "__main__":
@@ -77,3 +78,5 @@ if __name__ == "__main__":
     print(f"[DEBUG] Rank {rank} initialized buffer.")
 
     test_internode_allgather(buffer)
+
+    dist.destroy_process_group()

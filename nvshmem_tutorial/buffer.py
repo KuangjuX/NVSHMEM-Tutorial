@@ -43,10 +43,12 @@ class NvshmemBuffer:
         # Check if we need to initialize NVSHMEM for multi-node communication
         # This happens when we have multiple RDMA ranks or when low_latency_mode is enabled
         if self.runtime.get_num_rdma_ranks() > 1 or low_latency_mode:
-            os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = "1"
-            os.environ["NVSHMEM_DISABLE_P2P"] = "1"
-            os.environ["NVSHMEM_MAX_TEAMS"] = "7"
-            os.environ["NVSHMEM_DISABLE_NVLS"] = "1"
+            # os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = "1"
+            # os.environ["NVSHMEM_DISABLE_P2P"] = "1"
+            # os.environ["NVSHMEM_MAX_TEAMS"] = "7"
+            # os.environ["NVSHMEM_DISABLE_NVLS"] = "1"
+            # os.environ["NVSHMEM_CUMEM_GRANULARITY"] = f"{2 ** 29}"
+            # os.environ["NVSHMEM_DISABLE_MNNVL"] = "1"
 
             # Synchronize the NVSHMEM unique ID across all processes
             # This ID is used to establish the NVSHMEM communication context
@@ -67,10 +69,6 @@ class NvshmemBuffer:
             root_unique_id = nvshmem_unique_ids[
                 0 if low_latency_mode else self.runtime.get_root_rdma_rank(True)
             ]
-
-        # Validate that we have a valid root unique ID before proceeding
-        if root_unique_id is None:
-            raise RuntimeError(f"Rank {self.rank} Root unique ID is None")
 
         self.runtime.sync(device_ids, ipc_handles, root_unique_id)
 

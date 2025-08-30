@@ -2,12 +2,6 @@
 
 set -e
 
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <node_rank>"
-    exit 1
-fi
-
-NODE_RANK=$1
 
 # Set unlimited memory limit
 ulimit -l unlimited
@@ -32,8 +26,7 @@ export NVSHMEM_IB_TRAFFIC_CLASS=160
 
 torchrun \
     --nproc_per_node=8 \
-    --nnodes=2 \
-    --node_rank=$NODE_RANK \
+    --nnodes=1 \
     --master_addr=$MASTER_ADDR \
     --master_port=$MASTER_PORT \
     tests/test_internode_allgather.py

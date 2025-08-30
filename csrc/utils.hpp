@@ -5,7 +5,12 @@
 
 #include <cuda/pipeline>
 
-#define NUM_MAX_NVL_PEERS 8
+#ifdef ENABLE_RDMA
+  #define NUM_MAX_NVL_PEERS 8
+#else
+  #define NUM_MAX_NVL_PEERS 4
+#endif
+
 #define NUM_MAX_RDMA_PEERS 20
 
 #define FINISHED_SUM_TAG 1024
