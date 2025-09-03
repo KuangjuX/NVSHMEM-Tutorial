@@ -5,11 +5,9 @@
 
 #include <cuda/pipeline>
 
-// #ifdef ENABLE_RDMA
-//   #define NUM_MAX_NVL_PEERS 8
-// #else
-//   #define NUM_MAX_NVL_PEERS 4
-// #endif
+#define HOST_DEVICE __forceinline__ __host__ __device__
+#define DEVICE __forceinline__ __device__
+#define HOST __forceinline__ __host__
 
 #define NUM_MAX_NVL_PEERS 8
 
