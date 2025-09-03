@@ -81,6 +81,10 @@ class NvshmemBuffer:
         """Get the number of SMs on the device."""
         return self.runtime.get_num_device_sms()
 
+    def barrier(self):
+        """Barrier all processes in the group."""
+        nvshmem_runtime.nvshmem_barrier()
+
     def intranode_all_gather(self, tensor_list, tensor, async_op=False):
         """Perform intra-node all-gather communication using NVLink and CUDA IPC."""
         if not tensor.is_cuda:

@@ -14,8 +14,7 @@ namespace py = pybind11;
 
 namespace nvshmem_tutorial {
 class Buffer {
-  // STATIC_ASSERT(NUM_MAX_NVL_PEERS == 8, "NUM_MAX_NVL_PEERS must be equal to
-  // 8");
+  STATIC_ASSERT(NUM_MAX_NVL_PEERS == 8, "NUM_MAX_NVL_PEERS must be equal to 8");
 
  public:
   // DeepEP-like constructor: with rank topology and RDMA bytes

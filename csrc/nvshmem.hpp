@@ -114,7 +114,7 @@ inline void get_mem(void* local_ptr, void* remote_ptr, size_t nbytes,
  */
 inline void get_mem_async(void* local_ptr, void* remote_ptr, size_t nbytes,
                           int rank, cudaStream_t stream) {
-  nvshmem_getmem_nbi_on_stream(local_ptr, remote_ptr, nbytes, rank, stream);
+  nvshmemx_getmem_nbi_on_stream(local_ptr, remote_ptr, nbytes, rank, stream);
 }
 
 /**
@@ -139,7 +139,7 @@ inline void put_mem(void* remote_ptr, void* local_ptr, size_t nbytes,
  */
 inline void put_mem_async(void* remote_ptr, void* local_ptr, size_t nbytes,
                           int rank, cudaStream_t stream) {
-  nvshmem_putmem_nbi_on_stream(remote_ptr, local_ptr, nbytes, rank, stream);
+  nvshmemx_putmem_nbi_on_stream(remote_ptr, local_ptr, nbytes, rank, stream);
 }
 
 /**

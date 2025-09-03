@@ -5,7 +5,7 @@ namespace nvshmem_tutorial {
 template <typename DType>
 struct SymLayout {
  public:
-  SymLayout(void*& ptr, imt num_elems, int num_ranks) {
+  SymLayout(void*& ptr, int num_elems, int num_ranks) {
     num_bytes = num_elems * sizeof(DType);
 
     int per_channel_bytes = num_bytes * num_ranks;
@@ -15,11 +15,11 @@ struct SymLayout {
     ptr = reinterpret_cast<uint8_t*>(ptr) + total_bytes;
   }
 
-  DEVICE DType* send_buffer(int idx = 0) {
+  HOST_DEVICE DType* send_buffer(int idx = 0) {
     return reinterpret_cast<DType*>(send_ptr + idx * num_bytes);
   }
 
-  DEVICE DType* recv_buffer(int idx = 0) {
+  HOST_DEVICE DType* recv_buffer(int idx = 0) {
     return reinterpret_cast<DType*>(recv_ptr + idx * num_bytes);
   }
 

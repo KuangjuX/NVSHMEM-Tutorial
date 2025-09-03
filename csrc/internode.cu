@@ -48,9 +48,9 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
       if (rdma_rank == rdma_rank_) {
         continue;
       }
-
-      nvshmem::get_mem_async(recv_rdma_buffer, send_rdma_buffer, total_bytes,
-                             rdma_rank, comm_stream_);
+      auto dst_send_rdma_buffer = rdma_buffer.send_buffer(rdma_rank);
+      nvshmem::get_mem_async(recv_rdma_buffer, dst_send_rdma_buffer,
+                             total_bytes, rdma_rank, comm_stream_);
     }
   }
 
@@ -58,15 +58,15 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
   cudaStreamSynchronize(comm_stream_);
 
   for (int rank = 0; rank < num_ranks_; rank++) {
-    if (is_same_rdma_rank(rdma_rank)) {
-      void* ptr = static_cast<char*>(send_rdma_buffer) +
-                  (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
+    if (is_same_rdma_rank(rank)) {
+      auto ptr =
+          send_rdma_buffer + (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
       CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(), ptr,
                                  tensor.nbytes(), cudaMemcpyDeviceToDevice,
                                  comm_stream_));
     } else {
-      void* ptr = static_cast<char*>(recv_rdma_buffer) +
-                  (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
+      auto ptr =
+          recv_rdma_buffer + (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
       CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(), ptr,
                                  tensor.nbytes(), cudaMemcpyDeviceToDevice,
                                  comm_stream_));
