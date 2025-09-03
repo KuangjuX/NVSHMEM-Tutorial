@@ -43,10 +43,11 @@ class NvshmemBuffer:
         # Check if we need to initialize NVSHMEM for multi-node communication
         # This happens when we have multiple RDMA ranks or when low_latency_mode is enabled
         if self.runtime.get_num_rdma_ranks() > 1 or low_latency_mode:
-            # os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = "1"
-            # os.environ["NVSHMEM_DISABLE_P2P"] = "1"
-            # os.environ["NVSHMEM_MAX_TEAMS"] = "7"
-            # os.environ["NVSHMEM_DISABLE_NVLS"] = "1"
+            os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = "1"
+            os.environ["NVSHMEM_IBGDA_HIC_HANDLER"] = "gpu"
+            os.environ["NVSHMEM_DISABLE_P2P"] = "1"
+            os.environ["NVSHMEM_MAX_TEAMS"] = "7"
+            os.environ["NVSHMEM_DISABLE_NVLS"] = "1"
             # os.environ["NVSHMEM_CUMEM_GRANULARITY"] = f"{2 ** 29}"
             # os.environ["NVSHMEM_DISABLE_MNNVL"] = "1"
 
@@ -79,6 +80,10 @@ class NvshmemBuffer:
     def get_num_device_sms(self):
         """Get the number of SMs on the device."""
         return self.runtime.get_num_device_sms()
+
+    def barrier(self):
+        """Barrier all processes in the group."""
+        nvshmem_runtime.nvshmem_barrier()
 
     def intranode_all_gather(self, tensor_list, tensor, async_op=False):
         """Perform intra-node all-gather communication using NVLink and CUDA IPC."""

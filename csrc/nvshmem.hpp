@@ -105,6 +105,19 @@ inline void get_mem(void* local_ptr, void* remote_ptr, size_t nbytes,
 }
 
 /**
+ * Get memory with NVSHMEM asynchronously
+ * @param local_ptr The pointer to the local memory.
+ * @param remote_ptr The pointer to the remote memory.
+ * @param nbytes The size of the memory to get.
+ * @param rank The rank of the remote memory.
+ * @param stream The stream to use for the asynchronous operation.
+ */
+inline void get_mem_async(void* local_ptr, void* remote_ptr, size_t nbytes,
+                          int rank, cudaStream_t stream) {
+  nvshmemx_getmem_nbi_on_stream(local_ptr, remote_ptr, nbytes, rank, stream);
+}
+
+/**
  * Put memory with NVSHMEM
  * @param dst The pointer to the destination memory.
  * @param src The pointer to the source memory.
@@ -114,6 +127,19 @@ inline void get_mem(void* local_ptr, void* remote_ptr, size_t nbytes,
 inline void put_mem(void* remote_ptr, void* local_ptr, size_t nbytes,
                     int rank) {
   nvshmem_putmem(remote_ptr, local_ptr, nbytes, rank);
+}
+
+/**
+ * Put memory with NVSHMEM asynchronously
+ * @param remote_ptr The pointer to the remote memory.
+ * @param local_ptr The pointer to the local memory.
+ * @param nbytes The size of the memory to put.
+ * @param rank The rank of the remote memory.
+ * @param stream The stream to use for the asynchronous operation.
+ */
+inline void put_mem_async(void* remote_ptr, void* local_ptr, size_t nbytes,
+                          int rank, cudaStream_t stream) {
+  nvshmemx_putmem_nbi_on_stream(remote_ptr, local_ptr, nbytes, rank, stream);
 }
 
 /**

@@ -1,5 +1,6 @@
 #include "buffer.cuh"
 #include "nvshmem.hpp"
+#include "sync.cuh"
 
 #include <cstring>
 
@@ -67,19 +68,7 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
   }
 }
 
-Buffer::~Buffer() {
-  // Close peer handles
-  for (int i = 0; i < NUM_MAX_NVL_PEERS; ++i) {
-    if (i != nvl_rank_ && buffer_ptrs_[i] != nullptr) {
-      cudaIpcCloseMemHandle(buffer_ptrs_[i]);
-      buffer_ptrs_[i] = nullptr;
-    }
-  }
-  if (local_allocated_ && buffer_ptrs_[nvl_rank_] != nullptr) {
-    CUDA_CHECK(cudaFree(buffer_ptrs_[nvl_rank_]));
-    buffer_ptrs_[nvl_rank_] = nullptr;
-  }
-}
+Buffer::~Buffer() { destroy(); }
 
 void Buffer::sync(
     const std::vector<int>& device_ids,
@@ -195,23 +184,27 @@ pybind11::bytearray Buffer::get_local_nvshmem_unique_id() const {
 }
 
 void Buffer::destroy() {
+  // Synchronize
   CUDA_CHECK(cudaDeviceSynchronize());
   // Close CUDA IPC
-  for (int i = 0; i < NUM_MAX_NVL_PEERS; ++i) {
-    if (i != nvl_rank_ && buffer_ptrs_[i] != nullptr) {
-      cudaIpcCloseMemHandle(buffer_ptrs_[i]);
-      buffer_ptrs_[i] = nullptr;
+  if (is_available() && num_nvl_bytes_ > 0) {
+    sync::barrier(barrier_signal_ptrs_gpu_, nvl_rank_, num_nvl_ranks_,
+                  comm_stream_);
+
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    for (int i = 0; i < num_nvl_ranks_; i++) {
+      if (i != nvl_rank_) CUDA_CHECK(cudaIpcCloseMemHandle(buffer_ptrs_[i]));
     }
-  }
-  if (local_allocated_ && buffer_ptrs_[nvl_rank_] != nullptr) {
+
     CUDA_CHECK(cudaFree(buffer_ptrs_[nvl_rank_]));
-    buffer_ptrs_[nvl_rank_] = nullptr;
   }
+
   // Free NVSHMEM
-  if (rdma_buffer_ptr_ != nullptr) {
+  if (is_available() && rdma_buffer_ptr_ != nullptr) {
+    CUDA_CHECK(cudaDeviceSynchronize());
     nvshmem_barrier_all();
     nvshmem_free(rdma_buffer_ptr_);
-    rdma_buffer_ptr_ = nullptr;
   }
   available_ = false;
 }

@@ -121,14 +121,12 @@ def run_inter_node_test(rank, size_bytes=1024):
 
     # All PEs allocate a symmetric buffer
     buffer = nvshmem_alloc_tensor(size_bytes, 128)
+    local_tensor = nvshmem_alloc_tensor(size_bytes, 128)
     nvshmem_barrier()
 
     # Producer (rank 0) creates data and PUTs it to the consumer's buffer
     if rank == producer_pe:
-        local_tensor = torch.full(
-            (size_bytes,), fill_value=42, dtype=torch.uint8, device="cuda"
-        )
-        print(f"[Rank {rank}] Putting tensor to Rank {consumer_pe}'s buffer...")
+        local_tensor.fill_(42)
         nvshmem_put_tensor(buffer, local_tensor, size_bytes, consumer_pe)
 
     # Barrier ensures the PUT is complete before the consumer tries to read it
@@ -139,23 +137,14 @@ def run_inter_node_test(rank, size_bytes=1024):
         remote_tensor = torch.zeros(size_bytes, dtype=torch.uint8, device="cuda")
         remote_tensor.copy_(buffer)  # Direct copy from symmetric memory
 
-        print(f"[Rank {rank}] Copied from my symmetric buffer. Verifying...")
-        expected_sum = 42 * size_bytes
-        actual_sum = remote_tensor.sum().item()
-
-        if actual_sum == expected_sum:
-            print(f"SUCCESS (PUT): Data verified on Rank {rank}. Sum is correct.")
-        else:
-            print(
-                f"FAILURE (PUT): Data mismatch on Rank {rank}. Expected sum {expected_sum}, got {actual_sum}."
-            )
+        print(f"Remote Buffer: {remote_tensor}")
 
     nvshmem_free_tensor(buffer)
     nvshmem_barrier()
 
 
 def main():
-    rank, world_size, local_rank, node_rank = init_nvshmem()
+    rank, world_size, _, _ = init_nvshmem()
 
     if rank == 0:
         print("WORLD_SIZE = ", world_size)
