@@ -58,4 +58,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("nvshmem_put_tensor", &nvshmem::put_tensor, "Put memory with NVSHMEM",
         py::arg("remote_tensor"), py::arg("local_tensor"), py::arg("nbytes"),
         py::arg("rank"));
+
+  m.def("nvshmem_get_tensor_async", &nvshmem::get_tensor_async,
+        "Get memory with NVSHMEM asynchronously", py::arg("local_tensor"),
+        py::arg("remote_tensor"), py::arg("nbytes"), py::arg("rank"));
+  m.def("nvshmem_put_tensor_async", &nvshmem::put_tensor_async,
+        "Put memory with NVSHMEM asynchronously", py::arg("remote_tensor"),
+        py::arg("local_tensor"), py::arg("nbytes"), py::arg("rank"));
 }

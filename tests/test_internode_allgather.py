@@ -56,6 +56,8 @@ def test_internode_allgather(nvshmem_buffer: NvshmemBuffer):
     tensor_list = [torch.zeros_like(tensor) for _ in range(nvshmem_buffer.group_size)]
     nvshmem_buffer.internode_all_gather(tensor_list, tensor, async_op=False)
 
+    nvshmem_buffer.barrier()
+
     ref_tensor_list = [torch.zeros_like(tensor) for _ in range(buffer.group_size)]
     dist.all_gather(ref_tensor_list, tensor, group=dist.group.WORLD)
 

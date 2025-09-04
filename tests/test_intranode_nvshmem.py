@@ -36,7 +36,7 @@ def init_nvshmem():
     unique_ids = [None] * world_size
     dist.all_gather_object(unique_ids, unique_id, group=dist.group.WORLD)
 
-    init_with_unique_id(unique_ids[0], rank, world_size)
+    init_with_unique_id(unique_ids[0], rank, world_size, False)
 
     print(f"[Rank {rank}] NVSHMEM initialized successfully.")
 
