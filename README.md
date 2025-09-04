@@ -16,10 +16,7 @@ DeepEP (by DeepSeek) is a high‑performance communication library for MoE and E
 ## Install
 ```bash
 # Editable install of the CUDA extension + Python package
-python -m pip install -e .
-
-# Or use the provided Makefile
-make build
+pip install -e .
 ```
 
 

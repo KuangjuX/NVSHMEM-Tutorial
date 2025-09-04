@@ -212,6 +212,8 @@ def run_bandwidth_comparison(rank, world_size):
         1024 * 1024 * 4,  # 4 MB
         1024 * 1024 * 16,  # 16 MB
         1024 * 1024 * 64,  # 64 MB
+        1024 * 1024 * 256,  # 256 MB
+        1024 * 1024 * 1024,  # 1 GB
     ]
 
     results = []
@@ -248,54 +250,6 @@ def run_bandwidth_comparison(rank, world_size):
     return results
 
 
-def print_summary(results):
-    """
-    Print summary statistics of the benchmark results.
-    """
-    if not results:
-        return
-
-    print("\n" + "=" * 80)
-    print("BANDWIDTH COMPARISON SUMMARY")
-    print("=" * 80)
-    print(
-        f"{'Size (MB)':<12} {'Method':<18} {'Bandwidth (GB/s)':<18} {'Time (ms)':<12}"
-    )
-    print("-" * 80)
-
-    # Group results by size
-    size_results = {}
-    for result in results:
-        size_mb = result["size_bytes"] / (1024 * 1024)
-        if size_mb not in size_results:
-            size_results[size_mb] = {}
-        size_results[size_mb][result["method"]] = result
-
-    for size_mb in sorted(size_results.keys()):
-        size_data = size_results[size_mb]
-
-        if "NVSHMEM_PUT_ASYNC" in size_data:
-            result = size_data["NVSHMEM_PUT_ASYNC"]
-            print(
-                f"{size_mb:<12.2f} {'NVSHMEM':<18} {result['bandwidth_gbps']:<18.2f} {result['avg_time_ms']:<12.3f}"
-            )
-
-        if "NCCL_P2P" in size_data:
-            result = size_data["NCCL_P2P"]
-            print(
-                f"{'':<12} {'NCCL':<18} {result['bandwidth_gbps']:<18.2f} {result['avg_time_ms']:<12.3f}"
-            )
-
-        if "NVSHMEM_PUT_ASYNC" in size_data and "NCCL_P2P" in size_data:
-            speedup = (
-                size_data["NVSHMEM_PUT_ASYNC"]["bandwidth_gbps"]
-                / size_data["NCCL_P2P"]["bandwidth_gbps"]
-            )
-            print(f"{'':<12} {'Speedup:':<18} {speedup:<18.2f}x")
-
-        print()
-
-
 def main():
     local_rank = int(os.environ["LOCAL_RANK"])
     torch.cuda.set_device(local_rank)
@@ -308,9 +262,6 @@ def main():
         print("=" * 80)
 
     results = run_bandwidth_comparison(rank, world_size)
-
-    if rank == 0:
-        print_summary(results)
 
     dist.destroy_process_group()
 
