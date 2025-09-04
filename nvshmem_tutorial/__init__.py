@@ -7,4 +7,6 @@ from _nvshmem_tutorial import (
     nvshmem_barrier,
     nvshmem_get_tensor,
     nvshmem_put_tensor,
+    nvshmem_get_tensor_async,
+    nvshmem_put_tensor_async,
 )

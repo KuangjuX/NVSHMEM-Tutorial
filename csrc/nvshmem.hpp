@@ -2,6 +2,7 @@
 
 #include "utils.hpp"
 
+#include <ATen/cuda/CUDAContext.h>
 #include <torch/extension.h>
 
 #include <chrono>
@@ -157,6 +158,22 @@ inline void get_tensor(torch::Tensor& local_tensor,
 }
 
 /**
+ * Get memory with NVSHMEM asynchronously
+ * @param local_tensor The local tensor to store the memory.
+ * @param remote_tensor The remote tensor to get the memory from.
+ * @param nbytes The size of the memory to get.
+ * @param rank The rank of the remote tensor.
+ */
+inline void get_tensor_async(torch::Tensor& local_tensor,
+                             torch::Tensor& remote_tensor, size_t nbytes,
+                             int rank) {
+  void* local_ptr = local_tensor.data_ptr();
+  void* remote_ptr = remote_tensor.data_ptr();
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+  get_mem_async(local_ptr, remote_ptr, nbytes, rank, stream);
+}
+
+/**
  * Put memory with NVSHMEM
  * @param local_tensor The local tensor to put the memory from.
  * @param remote_tensor The remote tensor to put the memory to.
@@ -168,6 +185,23 @@ inline void put_tensor(torch::Tensor& remote_tensor,
   void* local_ptr = local_tensor.data_ptr();
   void* remote_ptr = remote_tensor.data_ptr();
   put_mem(remote_ptr, local_ptr, nbytes, rank);
+}
+
+/**
+ * Put memory with NVSHMEM asynchronously
+ * @param remote_tensor The remote tensor to put the memory to.
+ * @param local_tensor The local tensor to put the memory from.
+ * @param nbytes The size of the memory to put.
+ * @param rank The rank of the remote tensor.
+ */
+inline void put_tensor_async(torch::Tensor& remote_tensor,
+                             torch::Tensor& local_tensor, size_t nbytes,
+                             int rank) {
+  void* local_ptr = local_tensor.data_ptr();
+  void* remote_ptr = remote_tensor.data_ptr();
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+  put_mem_async(remote_ptr, local_ptr, nbytes, rank, stream);
 }
 
 }  // namespace nvshmem_tutorial::nvshmem

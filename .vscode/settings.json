@@ -36,7 +36,8 @@
         "deque": "cpp",
         "forward_list": "cpp",
         "unordered_map": "cpp",
-        "optional": "cpp"
+        "optional": "cpp",
+        "version": "cpp"
     },
 
     "[python]": {

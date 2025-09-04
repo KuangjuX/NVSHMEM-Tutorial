@@ -106,5 +106,7 @@ class Buffer {
   bool low_latency_mode_{false};
 
   at::cuda::CUDAStream comm_stream_;
+
+  bool destroyed_{false};
 };
 }  // namespace nvshmem_tutorial

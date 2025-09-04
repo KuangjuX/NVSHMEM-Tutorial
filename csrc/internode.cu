@@ -42,7 +42,7 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
     CUDA_CHECK(cudaMemcpyAsync(send_rdma_buffer, leader_nvl_buffer, total_bytes,
                                cudaMemcpyDeviceToDevice, comm_stream_));
 
-    nvshmem::barrier();
+    cudaStreamSynchronize(comm_stream_);
 
     for (int rdma_rank = 0; rdma_rank < num_rdma_ranks_; rdma_rank++) {
       if (rdma_rank == rdma_rank_) {
@@ -54,7 +54,6 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
     }
   }
 
-  // nvshmem::barrier();
   cudaStreamSynchronize(comm_stream_);
 
   for (int rank = 0; rank < num_ranks_; rank++) {

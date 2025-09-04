@@ -16,10 +16,7 @@ DeepEP (by DeepSeek) is a high‑performance communication library for MoE and E
 ## Install
 ```bash
 # Editable install of the CUDA extension + Python package
-python -m pip install -e .
-
-# Or use the provided Makefile
-make build
+pip install -e .
 ```
 
 
@@ -36,6 +33,31 @@ You can also use the convenience scripts in `scripts/`:
 bash scripts/run_intranode_nvshmem.sh 2
 bash scripts/run_internode_nvshmem.sh 0 # set rendezvous env first
 ```
+
+
+## Performance
+
+### Test Environment
+
+All benchmarks were conducted on NVIDIA H20 GPUs with NVLink connectivity:
+- **NVLink Bidirectional Bandwidth**: 900 GB/s (theoretical)
+- **NVLink Unidirectional Bandwidth**: 450 GB/s (theoretical)
+
+### Intranode P2P 
+
+| Data Size | NCCL P2P (GB/s) | CUDA IPC (GB/s) | NVSHMEM (GB/s) |
+|-----------|-----------------|-----------------|----------------|
+| 1 KB      | 0.06            |                 | 0.13           | 
+| 16 KB     | 0.90            |                 | 1.98           |
+| 64 KB     | 3.62            |                 | 7.90           |
+| 256 KB    | 14.02           |                 | 29.56          |
+| 1 MB      | 50.46           |                 | 97.17          |
+| 4 MB      | 201.49          |                 | 221.30         |
+| 16 MB     | 305.47          |                 | 322.24         |
+| 64 MB     | 343.01          |                 | 374.51         |
+| 256 MB    | 362.09          |                 | 390.88         |
+| 1 GB      | 335.65          |                 | 395.54         |
+
 
 
 

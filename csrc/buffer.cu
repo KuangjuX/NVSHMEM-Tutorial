@@ -68,7 +68,11 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
   }
 }
 
-Buffer::~Buffer() { destroy(); }
+Buffer::~Buffer() {
+  if (!destroyed_) {
+    destroy();
+  }
+}
 
 void Buffer::sync(
     const std::vector<int>& device_ids,
@@ -184,6 +188,7 @@ pybind11::bytearray Buffer::get_local_nvshmem_unique_id() const {
 }
 
 void Buffer::destroy() {
+  HOST_ASSERT(destroyed_ == false);
   // Synchronize
   CUDA_CHECK(cudaDeviceSynchronize());
   // Close CUDA IPC
@@ -197,16 +202,20 @@ void Buffer::destroy() {
       if (i != nvl_rank_) CUDA_CHECK(cudaIpcCloseMemHandle(buffer_ptrs_[i]));
     }
 
+    // Free local buffer and error flag
     CUDA_CHECK(cudaFree(buffer_ptrs_[nvl_rank_]));
   }
 
   // Free NVSHMEM
-  if (is_available() && rdma_buffer_ptr_ != nullptr) {
+  if (is_available() && num_rdma_bytes_ > 0) {
     CUDA_CHECK(cudaDeviceSynchronize());
-    nvshmem_barrier_all();
+    nvshmem_quiet();
+    nvshmem::barrier();
     nvshmem_free(rdma_buffer_ptr_);
+    nvshmem_finalize();
   }
   available_ = false;
+  destroyed_ = true;
 }
 
 int Buffer::get_local_pe() const { return local_pe_; }
