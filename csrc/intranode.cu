@@ -6,6 +6,38 @@
 
 namespace nvshmem_tutorial {
 
+void Buffer::intranode_send(const torch::Tensor& tensor, int rank) {
+  if (!tensor.is_cuda()) {
+    throw std::runtime_error("intranode_send expects CUDA tensor");
+  }
+
+  if (buffer_ptrs_[nvl_rank_] == nullptr) {
+    throw std::runtime_error("Local NVLink buffer not allocated");
+  }
+
+  CUDA_CHECK(cudaMemcpyAsync(buffer_ptrs_[nvl_rank_], tensor.data_ptr(),
+                             tensor.nbytes(), cudaMemcpyDeviceToDevice,
+                             comm_stream_));
+
+  cudaStreamSynchronize(comm_stream_);
+}
+
+void Buffer::intranode_recv(torch::Tensor& tensor, int rank) {
+  if (!tensor.is_cuda()) {
+    throw std::runtime_error("intranode_recv expects CUDA tensor");
+  }
+
+  if (buffer_ptrs_[nvl_rank_] == nullptr) {
+    throw std::runtime_error("Local NVLink buffer not allocated");
+  }
+
+  CUDA_CHECK(cudaMemcpyAsync(tensor.data_ptr(), buffer_ptrs_[nvl_rank_],
+                             tensor.nbytes(), cudaMemcpyDeviceToDevice,
+                             comm_stream_));
+
+  cudaStreamSynchronize(comm_stream_);
+}
+
 void Buffer::intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
                                   const torch::Tensor& tensor, bool async_op) {
   if (!tensor.is_cuda()) {
