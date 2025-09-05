@@ -94,7 +94,8 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
     }
   }
 
-  cudaStreamSynchronize(comm_stream_);
+  // Ensure data is finished copying from leader rank before other ranks start reading.
+  sync::barrier(barrier_signal_ptrs_gpu_, nvl_rank_, NUM_MAX_NVL_PEERS, comm_stream_);
 
   // 3. Non-leader_rank copy from buffer into tensor_list.
   if (nvl_rank_ != leader_rank) {
