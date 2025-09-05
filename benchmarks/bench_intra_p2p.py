@@ -10,6 +10,7 @@ from nvshmem_tutorial import (
     nvshmem_barrier,
     nvshmem_put_tensor_async,
     nvshmem_put_tensor,
+    NvshmemBuffer,
 )
 
 
@@ -113,6 +114,82 @@ def benchmark_nvshmem_put_throughput(
     nvshmem_free_tensor(buffer)
     nvshmem_barrier()
 
+    return result
+
+
+def benchmark_nvshmem_buffer_send_throughput(
+    rank, world_size, size_bytes, num_warmup=10, num_trials=100
+):
+    """
+    Benchmark NVSHMEM buffer send throughput.
+    """
+    if world_size < 2:
+        if rank == 0:
+            print(
+                "This benchmark requires at least 2 processes. Skipping NVSHMEM buffer send test."
+            )
+        return None
+
+    buffer = NvshmemBuffer(dist.group.WORLD, rank, world_size, 1e9, 0)
+
+    sender_rank = 0
+    receiver_rank = 1
+
+    result = None
+
+    # Warmup
+    if rank == sender_rank:
+
+        tensor = torch.ones(size_bytes, dtype=torch.uint8, device="cuda")
+        for _ in range(num_warmup):
+            buffer.send(tensor, receiver_rank)
+
+        # Wait for warmup sends to complete on the sender side
+        torch.cuda.synchronize()
+
+        # Synchronize with receiver before starting the benchmark
+        dist.barrier()
+
+        # Actual benchmark
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        start_event.record()
+        for _ in range(num_trials):
+            buffer.send(tensor, receiver_rank)
+        end_event.record()
+        torch.cuda.synchronize()
+
+        total_time_ms = start_event.elapsed_time(end_event)
+        total_time_s = total_time_ms / 1000.0
+        avg_time_ms = total_time_ms / num_trials
+        bandwidth_gbps = (size_bytes * num_trials) / (total_time_s * 1e9)
+
+        result = {
+            "method": "NVSHMEM_BUFFER_SEND_THROUGHPUT",
+            "size_bytes": size_bytes,
+            "avg_time_ms": avg_time_ms,
+            "bandwidth_gbps": bandwidth_gbps,
+            "num_trials": num_trials,
+        }
+
+    if rank == receiver_rank:
+        recv_tensor = torch.zeros(size_bytes, dtype=torch.uint8, device="cuda")
+
+        for _ in range(num_warmup):
+            buffer.recv(recv_tensor, sender_rank)
+        torch.cuda.synchronize()
+
+        dist.barrier()
+
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        start_event.record()
+        for _ in range(num_trials):
+            buffer.recv(recv_tensor, sender_rank)
+        end_event.record()
+        torch.cuda.synchronize()
+
+    dist.barrier()
     return result
 
 
