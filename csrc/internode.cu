@@ -21,7 +21,7 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
       SymLayout<uint8_t>(rdma_buffer_ptr_, total_bytes, num_rdma_ranks_);
 
   auto send_rdma_buffer = rdma_buffer.send_buffer(rdma_rank_);
-  auto recv_rdma_buffer = rdma_buffer.recv_buffer(rdma_rank_);
+  auto base_recv_rdma_buffer = rdma_buffer.recv_buffer(0);
 
   int leader_rank = 0;
 
@@ -49,7 +49,8 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
         continue;
       }
       auto dst_send_rdma_buffer = rdma_buffer.send_buffer(rdma_rank);
-      nvshmem::get_mem_async(recv_rdma_buffer, dst_send_rdma_buffer,
+      auto src_recv_rdma_buffer = rdma_buffer.recv_buffer(rdma_rank);
+      nvshmem::get_mem_async(src_recv_rdma_buffer, dst_send_rdma_buffer,
                              total_bytes, rdma_rank, comm_stream_);
     }
   }
@@ -64,11 +65,49 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
                                  tensor.nbytes(), cudaMemcpyDeviceToDevice,
                                  comm_stream_));
     } else {
-      auto ptr =
-          recv_rdma_buffer + (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
+      auto rdma_rank = rank / NUM_MAX_NVL_PEERS;
+      auto ptr = 
+        rdma_buffer.recv_buffer(rdma_rank) + (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
       CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(), ptr,
                                  tensor.nbytes(), cudaMemcpyDeviceToDevice,
                                  comm_stream_));
+    }
+  }
+
+  cudaStreamSynchronize(comm_stream_);
+
+  // 2. Copy from leader_rank back to other ranks on the same node.
+  if (nvl_rank_ == leader_rank) {
+    for (int rank = 0; rank < NUM_MAX_NVL_PEERS; ++rank) {
+      if (rank == leader_rank) {
+        continue;
+      }
+      
+      /*
+      // First copy all data in base_recv_rdma_buffer.
+      CUDA_CHECK(cudaMemcpyAsync(dst_nvl_buffer, base_recv_rdma_buffer, 
+      total_bytes * num_rdma_ranks_, cudaMemcpyDeviceToDevice, 
+      comm_stream_));
+      // Must prevent base_recv_rdma_buffer overlapping send_recv_rdma_buffer.
+      cudaStreamSynchronize(comm_stream_);
+      // Then copy the data in send_recv_rdma_buffer.
+      void* slot_in_dst_nvl_buffer = static_cast<char*>(dst_nvl_buffer) + rdma_rank_ * total_bytes;
+      CUDA_CHECK(cudaMemcpyAsync(slot_in_dst_nvl_buffer, send_rdma_buffer, 
+      total_bytes, cudaMemcpyDeviceToDevice, 
+      comm_stream_));
+      */
+      
+      // Async copy tensor by tensor to avoid calling cudaStreamSynchronize.
+      void* dst_nvl_buffer = buffer_ptrs_[rank];
+      for (int i = 0; i < num_ranks_; ++i) {
+        if (i == rank) {
+          continue;
+        }
+        void* slot_in_dst_nvl_buffer = static_cast<char*>(dst_nvl_buffer) + i * tensor.nbytes();
+        CUDA_CHECK(cudaMemcpyAsync(slot_in_dst_nvl_buffer, tensor_list[i].data_ptr(), 
+                                   tensor.nbytes(), cudaMemcpyDeviceToDevice, 
+                                   comm_stream_));
+      }
     }
   }
 

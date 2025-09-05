@@ -1,5 +1,5 @@
 from .buffer import NvshmemBuffer
-from _nvshmem_tutorial import (
+from _nvshmem_tutorial import ( # Defined in pybind.py
     get_unique_id,
     init_with_unique_id,
     nvshmem_alloc_tensor,

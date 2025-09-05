@@ -3,7 +3,8 @@ import sys
 import inspect
 from pathlib import Path
 
-sys.path.append(Path(__file__).parent.parent)
+# Find nvshmem_tutorial module without installing it.
+sys.path.append(Path(__file__).parent.parent)   # Equal to using PYTHONPATH
 
 import torch
 
