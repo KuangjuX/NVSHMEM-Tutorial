@@ -130,7 +130,7 @@ def benchmark_nvshmem_buffer_send_throughput(
             )
         return None
 
-    buffer = NvshmemBuffer(dist.group.WORLD, rank, world_size, 1e9, 0)
+    buffer = NvshmemBuffer(dist.group.WORLD, rank, world_size, 1024 * 1024 * 1024, 0)
 
     sender_rank = 0
     receiver_rank = 1
@@ -304,8 +304,19 @@ def run_bandwidth_comparison(rank, world_size):
         if nvshmem_result and rank == 0:
             results.append(nvshmem_result)
             print(
-                f"NVSHMEM PUT_ASYNC: {nvshmem_result['bandwidth_gbps']:.2f} GB/s, "
+                f"NVSHMEM Put: {nvshmem_result['bandwidth_gbps']:.2f} GB/s, "
                 f"avg_time: {nvshmem_result['avg_time_ms']:.3f} ms"
+            )
+
+        # Test NVSHMEM buffer
+        nvshmem_buffer_result = benchmark_nvshmem_buffer_send_throughput(
+            rank, world_size, size_bytes
+        )
+        if nvshmem_buffer_result and rank == 0:
+            results.append(nvshmem_buffer_result)
+            print(
+                f"CUDA IPC Buffer Send: {nvshmem_buffer_result['bandwidth_gbps']:.2f} GB/s, "
+                f"avg_time: {nvshmem_buffer_result['avg_time_ms']:.3f} ms"
             )
 
         # Test NCCL

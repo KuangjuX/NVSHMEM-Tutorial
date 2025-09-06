@@ -15,11 +15,8 @@ void Buffer::intranode_send(const torch::Tensor& tensor, int rank) {
     throw std::runtime_error("Local NVLink buffer not allocated");
   }
 
-  CUDA_CHECK(cudaMemcpyAsync(buffer_ptrs_[nvl_rank_], tensor.data_ptr(),
-                             tensor.nbytes(), cudaMemcpyDeviceToDevice,
-                             comm_stream_));
-
-  cudaStreamSynchronize(comm_stream_);
+  CUDA_CHECK(cudaMemcpy(buffer_ptrs_[rank], tensor.data_ptr(), tensor.nbytes(),
+                        cudaMemcpyDeviceToDevice));
 }
 
 void Buffer::intranode_recv(torch::Tensor& tensor, int rank) {
@@ -31,11 +28,8 @@ void Buffer::intranode_recv(torch::Tensor& tensor, int rank) {
     throw std::runtime_error("Local NVLink buffer not allocated");
   }
 
-  CUDA_CHECK(cudaMemcpyAsync(tensor.data_ptr(), buffer_ptrs_[nvl_rank_],
-                             tensor.nbytes(), cudaMemcpyDeviceToDevice,
-                             comm_stream_));
-
-  cudaStreamSynchronize(comm_stream_);
+  CUDA_CHECK(cudaMemcpy(tensor.data_ptr(), buffer_ptrs_[nvl_rank_],
+                        tensor.nbytes(), cudaMemcpyDeviceToDevice));
 }
 
 void Buffer::intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
