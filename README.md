@@ -43,18 +43,18 @@ All benchmarks were conducted on NVIDIA H20 GPUs with NVLink connectivity:
 
 ### Point-to-Point Communication
 
-| Type      | Data Size | NCCL P2P (GB/s) | Hybrid (GB/s)   | NVSHMEM (GB/s) |
+| Type      | Data Size | NCCL P2P (GB/s) | CUDA IPC (GB/s) | NVSHMEM (GB/s) |
 | --------- |-----------|-----------------|-----------------|----------------|
-| Intranode | 1 KB      | 0.06            |                 | 0.13           | 
-| Intranode | 16 KB     | 0.90            |                 | 1.98           |
-| Intranode | 64 KB     | 3.62            |                 | 7.90           |
-| Intranode | 256 KB    | 14.02           |                 | 29.56          |
-| Intranode | 1 MB      | 50.46           |                 | 97.17          |
-| Intranode | 4 MB      | 201.49          |                 | 221.30         |
-| Intranode | 16 MB     | 305.47          |                 | 322.24         |
-| Intranode | 64 MB     | 343.01          |                 | 374.51         |
-| Intranode | 256 MB    | 362.09          |                 | 390.88         |
-| Intranode | 1 GB      | 335.65          |                 | 395.54         |
+| Intranode | 1 KB      | 0.06            |    0.12         | 0.13           | 
+| Intranode | 16 KB     | 0.90            |    1.81         | 1.98           |
+| Intranode | 64 KB     | 3.62            |    7.39         | 7.90           |
+| Intranode | 256 KB    | 14.02           |    27.57        | 29.56          |
+| Intranode | 1 MB      | 50.46           |    90.86        | 97.17          |
+| Intranode | 4 MB      | 201.49          |    215.72       | 221.30         |
+| Intranode | 16 MB     | 305.47          |    321.68       | 322.24         |
+| Intranode | 64 MB     | 343.01          |    366.67       | 374.51         |
+| Intranode | 256 MB    | 362.09          |    384.58       | 390.88         |
+| Intranode | 1 GB      | 335.65          |    389,74       | 395.54         |
 
 
 

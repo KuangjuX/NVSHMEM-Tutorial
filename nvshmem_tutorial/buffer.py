@@ -22,6 +22,7 @@ class NvshmemBuffer:
         self.group_size = group.size()
         self.rank = rank
         self.num_ranks = num_ranks
+        self.num_rdma_ranks = num_ranks // 8
         self.num_nvl_bytes = num_nvl_bytes
         self.num_rdma_bytes = num_rdma_bytes
 
@@ -100,3 +101,37 @@ class NvshmemBuffer:
         if len(tensor_list) != self.group_size:
             raise ValueError("Tensor list must match group size")
         self.runtime.internode_all_gather(tensor_list, tensor, async_op)
+
+    def send(self, tensor, rank):
+        """Send a tensor synchronously."""
+        if not tensor.is_cuda:
+            raise ValueError("Tensor must be CUDA tensor")
+        if self.is_same_rdma_rank(rank):
+            self.runtime.intranode_send(tensor, rank)
+        else:
+            raise NotImplementedError("Send to different RDMA rank is not supported")
+
+    def recv(self, tensor, rank):
+        """Receive a tensor synchronously."""
+        if not tensor.is_cuda:
+            raise ValueError("Tensor must be CUDA tensor")
+        if self.is_same_rdma_rank(rank):
+            self.runtime.intranode_recv(tensor, rank)
+        else:
+            raise NotImplementedError("Recv from different RDMA rank is not supported")
+
+    def all_gather(self, tensor_list, tensor, async_op=False):
+        """Perform all-gather communication using NVLink and CUDA IPC."""
+        if not tensor.is_cuda:
+            raise ValueError("Tensor must be CUDA tensor")
+        if len(tensor_list) != self.group_size:
+            raise ValueError("Tensor list must match group size")
+
+        if self.num_rdma_ranks > 1:
+            self.runtime.internode_all_gather(tensor_list, tensor, async_op)
+        else:
+            self.runtime.intranode_all_gather(tensor_list, tensor, async_op)
+
+    def is_same_rdma_rank(self, rank):
+        """Check if the rank is the same RDMA rank."""
+        return self.rank // 8 == rank // 8

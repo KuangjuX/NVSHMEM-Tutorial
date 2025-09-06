@@ -19,6 +19,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("get_local_buffer_u8", &Buffer::get_local_buffer_u8)
       .def("sync", &Buffer::sync)
       // Intranode communication
+      .def("intranode_send", &Buffer::intranode_send)
+      .def("intranode_recv", &Buffer::intranode_recv)
       .def("intranode_all_gather", &Buffer::intranode_all_gather)
       .def("intranode_all_to_all", &Buffer::intranode_all_to_all)
       // Internode communication
