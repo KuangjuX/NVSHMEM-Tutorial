@@ -54,7 +54,7 @@ All benchmarks were conducted on NVIDIA H20 GPUs with NVLink connectivity:
 | Intranode | 16 MB     | 305.47          |    321.68       | 322.24         |
 | Intranode | 64 MB     | 343.01          |    366.67       | 374.51         |
 | Intranode | 256 MB    | 362.09          |    384.58       | 390.88         |
-| Intranode | 1 GB      | 335.65          |    389,74       | 395.54         |
+| Intranode | 1 GB      | 335.65          |    389.74       | 395.54         |
 
 
 
