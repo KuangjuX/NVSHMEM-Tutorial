@@ -43,6 +43,7 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
                                comm_stream_));
 
     cudaStreamSynchronize(comm_stream_);
+
     nvshmem::barrier();
 
     for (int rdma_rank = 0; rdma_rank < num_rdma_ranks_; rdma_rank++) {
@@ -56,7 +57,7 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
     }
   }
 
-  nvshmem::barrier();
+  cudaStreamSynchronize(comm_stream_);
 
   for (int rank = 0; rank < num_ranks_; rank++) {
     if (is_same_rdma_rank(rank)) {

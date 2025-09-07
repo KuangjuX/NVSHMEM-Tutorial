@@ -34,4 +34,4 @@ torchrun \
     --node_rank=$NODE_RANK \
     --master_addr=$MASTER_ADDR \
     --master_port=$MASTER_PORT \
-    tests/test_internode_allgather.py
+    benchmarks/bench_allgather.py
