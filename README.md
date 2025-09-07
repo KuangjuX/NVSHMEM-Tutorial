@@ -56,6 +56,27 @@ All benchmarks were conducted on NVIDIA H20 GPUs with NVLink connectivity:
 | Intranode | 256 MB    | 362.09          |    384.58       | 390.88         |
 | Intranode | 1 GB      | 335.65          |    389.74       | 395.54         |
 
+### All Gather Communication
+
+| Type      | Data Size | NCCL (GB/s)     | Hybrid (GB/s)   |
+| --------- |-----------|-----------------|-----------------|
+| Intranode | 4 KB      | 0.18            |    0.54         |
+| Intranode | 16 KB     | 1.00            |    2.12         |
+| Intranode | 64 KB     | 3.63            |    8.10         |
+| Intranode | 256 KB    | 11.13           |    29.30        |
+| Intranode | 1024 KB   | 53.61           |    73.43        |
+| Intranode | 2 MB      | 76.51           |    87.27        |
+| Intranode | 4 MB      | 107.46          |    92.57        |
+| Intranode | 8 MB      | 170.90          |    99.19        |
+| Intranode | 16 MB     | 210.44          |    93.75        |
+| Intranode | 32 MB     | 230.63          |    92.16        |
+| Intranode | 64 MB     | 239.52          |    93.24        |
+| Internode | 4 KB      | 0.29            |    0.16         |
+| Internode | 16 kB     | 0.92            |    0.62         |
+| Internode | 64 KB     | 5.40            |    2.39         |
+| Internode | 256 KB    | 21.23           |    8.10         |
+| Internode | 1024 KB   | 63.34           |    17.41        |
+
 
 
 
