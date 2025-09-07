@@ -51,9 +51,13 @@ inline int init_with_unique_id(const std::vector<uint8_t>& unique_id_vec,
     nvshmem_team_t cpu_rdma_team = NVSHMEM_TEAM_INVALID;
     nvshmem_team_config_t cpu_rdma_team_config;
     HOST_ASSERT(nvshmem_team_split_strided(
-                    NVSHMEM_TEAM_WORLD, rank % NUM_MAX_NVL_PEERS,
-                    NUM_MAX_NVL_PEERS, num_ranks / NUM_MAX_NVL_PEERS,
-                    &cpu_rdma_team_config, 0, &cpu_rdma_team) == 0);
+                    NVSHMEM_TEAM_WORLD,             // Parent team to split
+                    rank % NUM_MAX_NVL_PEERS,       // Start of the sub-team
+                    NUM_MAX_NVL_PEERS,              // Stride to split the parent team
+                    num_ranks / NUM_MAX_NVL_PEERS,  // Number of PEs within sub-team
+                    &cpu_rdma_team_config,          // Team Config
+                    0,                              // Mask
+                    &cpu_rdma_team) == 0);          // Sub-team handle
     HOST_ASSERT(cpu_rdma_team != NVSHMEM_TEAM_INVALID);
   }
 

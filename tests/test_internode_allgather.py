@@ -3,7 +3,8 @@ import sys
 import inspect
 from pathlib import Path
 
-sys.path.append(Path(__file__).parent.parent)
+# Find nvshmem_tutorial module without installing it.
+sys.path.append(Path(__file__).parent.parent)   # Equal to using PYTHONPATH
 
 import torch
 
@@ -63,11 +64,11 @@ def test_internode_allgather(nvshmem_buffer: NvshmemBuffer):
 
     env_rank = int(os.getenv("RANK", "0"))
 
-    if env_rank == 0:
-        for i in range(nvshmem_buffer.group_size):
+    for i in range(nvshmem_buffer.group_size):
+        if env_rank == 0:
             print(f"tensor_list[{i}] = {tensor_list[i]}")
             print(f"ref_tensor_list[{i}] = {ref_tensor_list[i]}")
-            # torch.testing.assert_close(tensor_list[i], ref_tensor_list[i])
+        torch.testing.assert_close(tensor_list[i], ref_tensor_list[i])
 
     if env_rank == 0:
         print("Test passed")
