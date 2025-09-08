@@ -87,12 +87,7 @@ def init_nvshmem():
     """
     Initializes torch.distributed and then uses it to bootstrap NVSHMEM for multi-node execution.
     """
-    # CRITICAL CHANGE: Enable UCX for network transport
-    # 'ucx' is the recommended transport for InfiniBand/RoCE and high-speed Ethernet.
-    # os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "ucx"
-    # os.environ["NVSHMEM_DISABLE_P2P"] = "1"
     os.environ["NVSHMEM_IB_ENABLE_IBGDA"] = "1"
-    # os.environ["NVSHMEM_MAX_TEAMS"] = "7"
 
     # These are set by the torchrun launcher
     rank = int(os.environ["RANK"])

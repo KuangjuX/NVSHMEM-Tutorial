@@ -69,6 +69,13 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         32768,
         65536,
         131072,
+        262144,
+        524288,
+        1048576,
+        2097152,
+        4194304,
+        8388608,
+        16777216,
     ]
     dtype = torch.bfloat16
     warmup_iters = 10
