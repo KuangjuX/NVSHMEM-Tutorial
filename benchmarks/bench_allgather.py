@@ -62,13 +62,17 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         64,
         256,
         1024,
-        2048,
-        4096,
-        8192,
-        16384,
-        32768,
-        65536,
-        131072,
+        2    * 1024,
+        4    * 1024,
+        8    * 1024,
+        16   * 1024,
+        32   * 1024,
+        64   * 1024,
+        128  * 1024,
+        256  * 1024,
+        512  * 1024,
+        1024 * 1024,
+        2048 * 1024,
     ]
     dtype = torch.bfloat16
     warmup_iters = 10
@@ -92,13 +96,13 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         tensor_bytes = tensor.numel() * tensor.element_size()
 
         # --- Prepare output tensors ---
-        nccl_output_list = [torch.empty_like(tensor) for _ in range(world_size)]
-        nvshmem_output_list = [torch.empty_like(tensor) for _ in range(world_size)]
+        # Use the same tensor_list to reduce allocations.
+        output_list = [torch.empty_like(tensor) for _ in range(world_size)]
 
         # --- NCCL Benchmark ---
         # Warm-up
         for _ in range(warmup_iters):
-            dist.all_gather(nccl_output_list, tensor, group=dist.group.WORLD)
+            dist.all_gather(output_list, tensor, group=dist.group.WORLD)
 
         # Measurement
         torch.cuda.synchronize()  # Ensure all previous GPU work is done
@@ -107,7 +111,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
 
         start_event.record()
         for _ in range(benchmark_iters):
-            dist.all_gather(nccl_output_list, tensor, group=dist.group.WORLD)
+            dist.all_gather(output_list, tensor, group=dist.group.WORLD)
         end_event.record()
 
         torch.cuda.synchronize()  # Wait for the benchmarked work to finish
@@ -116,13 +120,13 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         # --- NVSHMEM Benchmark ---
         # Warm-up
         for _ in range(warmup_iters):
-            nvshmem_buffer.all_gather(nvshmem_output_list, tensor, async_op=False)
+            nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
 
         # Measurement
         torch.cuda.synchronize()
         start_event.record()
         for _ in range(benchmark_iters):
-            nvshmem_buffer.all_gather(nvshmem_output_list, tensor, async_op=False)
+            nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
         end_event.record()
 
         torch.cuda.synchronize()
@@ -152,7 +156,7 @@ if __name__ == "__main__":
     rank, world_size, group = init_dist()
     print(f"Global rank = {rank}, world_size = {world_size}")
 
-    buffer_size = 1024 * 1024 * 1024
+    buffer_size = 4 * 1024 * 1024 * 1024
 
     if rank == 0:
         print(f"Buffer size = {buffer_size/1024/1024} MB")
