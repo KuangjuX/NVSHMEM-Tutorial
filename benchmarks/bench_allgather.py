@@ -108,13 +108,44 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         torch.cuda.synchronize()  # Ensure all previous GPU work is done
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
+        dist.barrier()
 
+        '''
+        Torch Programming Paradigm:
+            1. Sync is inevitable because end_event cannot be launched on the same stream as nccl.
+
+            2. handle.wait() will yield the main thread, while cudaDeviceSynchronize will spin,
+            just makes the device wait for the completion of previous operations of all streams.
+
+            3. async_all_gather + handle.wait() == sync_all_gather. In this case, 
+            handle.wait() inserts an event on NCCL stream and calls cudaStreamWaitEvent()
+            to make the default stream to wait for NCCL stream.
+
+            4. When handle.wait() or sync_all_gather returns, it doesn't mean the communication is
+            finished. It still needs to call torch.cuda.synchronize()/torch.current_stream().synchronize() 
+            to ensure the communication is finished. current_stream.synchronize() is also valid
+            because handle.wait() makes the default stream to wait for NCCL stream. `event.synchronize()`
+            is also valid.
+
+            5. Related Discussions: https://github.com/pytorch/pytorch/issues/68112
+        '''
+
+        # Async All Gather
         start_event.record()
         for _ in range(benchmark_iters):
-            dist.all_gather(output_list, tensor, group=dist.group.WORLD)
+            handle = dist.all_gather(output_list, tensor, group=dist.group.WORLD, async_op=True)
+        torch.cuda.synchronize()    # Replace handle.wait() with torch.cuda.synchronize()
         end_event.record()
+        end_event.synchronize()  # Wait for the benchmarked work to finish
 
-        torch.cuda.synchronize()  # Wait for the benchmarked work to finish
+        # Sync All Gather
+        # start_event.record()
+        # for _ in range(benchmark_iters):
+        #     dist.all_gather(output_list, tensor, group=dist.group.WORLD)
+        # end_event.record()
+
+        # torch.cuda.synchronize()
+        # end_event.synchronize()
         nccl_time_ms = start_event.elapsed_time(end_event) / benchmark_iters
 
         # --- NVSHMEM Benchmark ---
@@ -122,11 +153,12 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         for _ in range(warmup_iters):
             nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
 
-        # Measurement
+        # Measurement(Async)
         torch.cuda.synchronize()
         start_event.record()
         for _ in range(benchmark_iters):
-            nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
+            nvshmem_buffer.all_gather(output_list, tensor, async_op=True)
+        torch.cuda.synchronize()
         end_event.record()
 
         torch.cuda.synchronize()
