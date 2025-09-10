@@ -108,6 +108,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         torch.cuda.synchronize()  # Ensure all previous GPU work is done
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
+        dist.barrier()
 
         '''
         Torch Programming Paradigm:
@@ -129,20 +130,22 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
             5. Related Discussions: https://github.com/pytorch/pytorch/issues/68112
         '''
 
+        # # Async All Gather
+        start_event.record()
+        for _ in range(benchmark_iters):
+            handle = dist.all_gather(output_list, tensor, group=dist.group.WORLD, async_op=True)
+        torch.cuda.synchronize()    # Replace handle.wait() with torch.cuda.synchronize()
+        end_event.record()
+        end_event.synchronize()  # Wait for the benchmarked work to finish
+
         # Sync All Gather
         # start_event.record()
         # for _ in range(benchmark_iters):
         #     dist.all_gather(output_list, tensor, group=dist.group.WORLD)
         # end_event.record()
 
-        # Async All Gather
-        start_event.record()
-        for _ in range(benchmark_iters):
-            handle = dist.all_gather(output_list, tensor, group=dist.group.WORLD, async_op=True)
-        torch.cuda.synchronize()    # Replace handle.wait() with torch.cuda.synchronize()
-        end_event.record()
-
-        end_event.synchronize()  # Wait for the benchmarked work to finish
+        # torch.cuda.synchronize()
+        # end_event.synchronize()
         nccl_time_ms = start_event.elapsed_time(end_event) / benchmark_iters
 
         # --- NVSHMEM Benchmark ---
@@ -150,11 +153,12 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         for _ in range(warmup_iters):
             nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
 
-        # Measurement
+        # Measurement(Async)
         torch.cuda.synchronize()
         start_event.record()
         for _ in range(benchmark_iters):
-            nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
+            nvshmem_buffer.all_gather(output_list, tensor, async_op=True)
+        torch.cuda.synchronize()
         end_event.record()
 
         torch.cuda.synchronize()
