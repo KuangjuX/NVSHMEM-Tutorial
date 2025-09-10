@@ -17,3 +17,4 @@ NPROC_PER_NODE=$1
 torchrun \
     --nproc_per_node=$NPROC_PER_NODE \
     benchmarks/bench_p2p.py
+    

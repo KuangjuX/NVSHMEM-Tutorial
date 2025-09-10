@@ -14,38 +14,6 @@ from nvshmem_tutorial import (
 )
 
 
-# def init_nvshmem():
-#     """
-#     Initializes torch.distributed and then uses it to bootstrap NVSHMEM.
-#     """
-#     # os.environ["NVSHMEM_REMOTE_TRANSPORT"] = "none"
-
-#     rank = int(os.environ["RANK"])
-#     local_rank = int(os.environ["LOCAL_RANK"])
-#     world_size = int(os.environ["WORLD_SIZE"])
-
-#     print(f"[Rank {rank}] Setting device to cuda:{local_rank}")
-#     torch.cuda.set_device(local_rank)
-
-#     dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
-
-#     if rank == 0:
-#         unique_id = get_unique_id()
-#     else:
-#         unique_id = None
-
-#     unique_ids = [None] * world_size
-#     dist.all_gather_object(unique_ids, unique_id, group=dist.group.WORLD)
-
-#     init_with_unique_id(unique_ids[0], rank, world_size, False)
-
-#     print(f"[Rank {rank}] NVSHMEM initialized successfully.")
-
-#     dist.barrier()
-
-#     return rank, world_size
-
-
 def init_dist():
     # NOTES: you may rewrite this function with your own cluster settings
     ip = os.getenv("MASTER_ADDR", "127.0.0.1")
@@ -352,7 +320,7 @@ def benchmark_nccl_p2p_throughput(
     return result
 
 
-def run_bandwidth_comparison(rank, world_size):
+def run_bandwidth_comparison(rank, world_size, node_ranks):
     """
     Run bandwidth comparison between NVSHMEM and NCCL for different data sizes.
     """
@@ -386,15 +354,16 @@ def run_bandwidth_comparison(rank, world_size):
             )
 
         # Test NVSHMEM buffer
-        # nvshmem_buffer_result = benchmark_nvshmem_buffer_send_throughput(
-        #     rank, world_size, size_bytes
-        # )
-        # if nvshmem_buffer_result and rank == 0:
-        #     results.append(nvshmem_buffer_result)
-        #     print(
-        #         f"CUDA IPC Buffer Send: {nvshmem_buffer_result['bandwidth_gbps']:.2f} GB/s, "
-        #         f"avg_time: {nvshmem_buffer_result['avg_time_ms']:.3f} ms"
-        #     )
+        if node_ranks == 1:
+            nvshmem_buffer_result = benchmark_nvshmem_buffer_send_throughput(
+                rank, world_size, size_bytes
+            )
+            if nvshmem_buffer_result and rank == 0:
+                results.append(nvshmem_buffer_result)
+                print(
+                    f"CUDA IPC Buffer Send: {nvshmem_buffer_result['bandwidth_gbps']:.2f} GB/s, "
+                    f"avg_time: {nvshmem_buffer_result['avg_time_ms']:.3f} ms"
+                )
 
         # Test NCCL
         nccl_result = benchmark_nccl_p2p_throughput(rank, world_size, size_bytes)
@@ -416,19 +385,16 @@ def run_bandwidth_comparison(rank, world_size):
 
 
 def main():
-    # local_rank = int(os.environ["LOCAL_RANK"])
-    # torch.cuda.set_device(local_rank)
-
-    # rank, world_size = init_nvshmem()
-
     rank, world_size, _, _ = init_nvshmem()
+
+    node_ranks = world_size // int(os.environ["LOCAL_WORLD_SIZE"])
 
     if rank == 0:
         print("Starting Intra-node P2P Bandwidth Comparison: NVSHMEM vs NCCL")
-        print(f"World size: {world_size}")
+        print(f"World size: {world_size}, Node ranks: {node_ranks}")
         print("=" * 80)
 
-    results = run_bandwidth_comparison(rank, world_size)
+    run_bandwidth_comparison(rank, world_size, node_ranks)
 
     dist.destroy_process_group()
 
