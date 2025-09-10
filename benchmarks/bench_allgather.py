@@ -62,15 +62,15 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         64,
         256,
         1024,
-        2    * 1024,
-        4    * 1024,
-        8    * 1024,
-        16   * 1024,
-        32   * 1024,
-        64   * 1024,
-        128  * 1024,
-        256  * 1024,
-        512  * 1024,
+        2 * 1024,
+        4 * 1024,
+        8 * 1024,
+        16 * 1024,
+        32 * 1024,
+        64 * 1024,
+        128 * 1024,
+        256 * 1024,
+        512 * 1024,
         1024 * 1024,
         2048 * 1024,
     ]
@@ -130,7 +130,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
             5. Related Discussions: https://github.com/pytorch/pytorch/issues/68112
         '''
 
-        # # Async All Gather
+        # Async All Gather
         start_event.record()
         for _ in range(benchmark_iters):
             handle = dist.all_gather(output_list, tensor, group=dist.group.WORLD, async_op=True)
