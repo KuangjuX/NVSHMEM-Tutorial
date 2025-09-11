@@ -1,10 +1,56 @@
 #include "buffer.cuh"
+#include "ptx_wrapper.cuh"
 #include "sync.cuh"
 #include "utils.hpp"
 
 #include <torch/torch.h>
 
 namespace nvshmem_tutorial {
+
+namespace kernels {
+template <typename DType, const int kChunkSize>
+__global__ void tma_load(const DType* input, DType* output, int total_bytes) {
+  extern __shared__ DType smem[kChunkSize];
+
+  __shared__ uint64_t mbar_ptr;
+  int tid = threadIdx.x;
+
+  // Initialize barrier
+  if (tid == 0) {
+    mbarrier_init(&mbar_ptr, 1);
+  }
+
+  __syncthreads();
+
+  for (offset = blockIdx.x * kChunkSize; offset < total_bytes;
+       offset += gridDim.x * kChunkSize) {
+    const DType* input_ptr = input + offset;
+    DType* output_ptr = output + offset;
+
+    // TODO(Kuangjux): Determine the copy bytes
+    int copy_bytes = sizeof(DType) * kChunkSize;
+
+    if (tid == 0) {
+      // Launch a TMA (Tensor Memory Access) load operation from global memory
+      // (input_ptr) to shared memory (smem).
+      tma_load_1d(input_ptr, smem, &mbar_ptr, copy_bytes);
+      // Arrive at the memory barrier and expect a transaction of copy_bytes to
+      // synchronize the transfer.
+      mbarrier_arrive_and_expect_tx(&mbar_ptr, copy_bytes);
+    }
+
+    mbarrier_wait(&mbar_ptr, phase);
+
+    if (tid == 0) {
+      tma_store_1d(smem, output_ptr, copy_bytes);
+    }
+
+    tma_store_wait<0>();
+
+    __syncthreads();
+  }
+}
+}  // namespace kernels
 
 void Buffer::intranode_send(const torch::Tensor& tensor, int rank) {
   if (!tensor.is_cuda()) {
