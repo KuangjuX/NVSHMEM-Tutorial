@@ -31,21 +31,24 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
 
   CUDA_CHECK(cudaMemcpyAsync(slot_in_leader_nvl_buffer, tensor.data_ptr(),
                              tensor.nbytes(), cudaMemcpyDeviceToDevice,
-                             comm_stream_));
+                             comm_streams_[nvl_rank_]));
 
   sync::barrier(barrier_signal_ptrs_gpu_, nvl_rank_, NUM_MAX_NVL_PEERS,
-                comm_stream_);
+                comm_streams_[nvl_rank_]);
 
-  // 1. Leader rank sends all local tensors to rdma buffer.
   if (nvl_rank_ == leader_rank) {
+    // 1. Leader rank sends all local tensors to rdma buffer.
     CUDA_CHECK(cudaMemcpyAsync(send_rdma_buffer, leader_nvl_buffer,
                                same_node_total_bytes, cudaMemcpyDeviceToDevice,
-                               comm_stream_));
+                               comm_streams_[nvl_rank_]));
 
-    cudaStreamSynchronize(comm_stream_);
-
+    // cudaStreamSynchronize + nvshmem_barrier_all together
+    // to ensure nvshmem_get happens after data is ready in 
+    // rdma buffer.
+    cudaStreamSynchronize(comm_streams_[nvl_rank_]);
     nvshmem::barrier();
 
+    // All leader PEs conduct internode communications.
     for (int rdma_rank = 0; rdma_rank < num_rdma_ranks_; rdma_rank++) {
       if (rdma_rank == rdma_rank_) {
         continue;
@@ -53,56 +56,50 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
       auto dst_send_rdma_buffer = rdma_buffer.send_buffer(rdma_rank);
       auto src_recv_rdma_buffer = rdma_buffer.recv_buffer(rdma_rank);
       nvshmem::get_mem_async(src_recv_rdma_buffer, dst_send_rdma_buffer,
-                             same_node_total_bytes, rdma_rank, comm_stream_);
+                             same_node_total_bytes, rdma_rank, comm_streams_[nvl_rank_]);
     }
-  }
 
-  cudaStreamSynchronize(comm_stream_);
-
-  for (int rank = 0; rank < num_ranks_; rank++) {
-    if (is_same_rdma_rank(rank)) {
-      auto ptr =
-          send_rdma_buffer + (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
-      CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(), ptr,
-                                 tensor.nbytes(), cudaMemcpyDeviceToDevice,
-                                 comm_stream_));
-    } else {
-      auto rdma_rank = rank / NUM_MAX_NVL_PEERS;
-      auto ptr = rdma_buffer.recv_buffer(rdma_rank) +
-                 (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
-      CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(), ptr,
-                                 tensor.nbytes(), cudaMemcpyDeviceToDevice,
-                                 comm_stream_));
-    }
-  }
-
-  cudaStreamSynchronize(comm_stream_);
-
-  // 2. Copy from leader_rank back to other ranks on the same node.
-  if (nvl_rank_ == leader_rank) {
-    for (int rank = 0; rank < NUM_MAX_NVL_PEERS; ++rank) {
-      if (rank == leader_rank) {
-        continue;
+    // Ensure leader rank itself has finished its own internode part.
+    cudaStreamSynchronize(comm_streams_[nvl_rank_]);
+  
+    // Copy from buffer into tensor_list and ranks on the same node
+    // simultaneously to avoid calling cudaStreamSynchronize.
+    for (int rank = 0; rank < num_ranks_; rank++) {
+      void* ptr = nullptr;
+      if (is_same_rdma_rank(rank)) {
+        ptr =
+            send_rdma_buffer + (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
+      } else {
+        auto rdma_rank = rank / NUM_MAX_NVL_PEERS;
+        ptr = rdma_buffer.recv_buffer(rdma_rank) +
+                   (rank % NUM_MAX_NVL_PEERS) * tensor.nbytes();
       }
 
-      // Async copy tensor by tensor to avoid calling cudaStreamSynchronize.
-      void* dst_nvl_buffer = buffer_ptrs_[rank];
-      for (int i = 0; i < num_ranks_; ++i) {
+      CUDA_CHECK(cudaMemcpyAsync(tensor_list[rank].data_ptr(), ptr,
+                                   tensor.nbytes(), cudaMemcpyDeviceToDevice,
+                                   comm_streams_[nvl_rank_]));
+
+      // 2. Copy from leader rank back to other ranks on the same node.
+      for (int nvl_rank = 0; nvl_rank < NUM_MAX_NVL_PEERS; ++nvl_rank) {
+        if (nvl_rank == leader_rank) {
+          continue;
+        }
+        void* dst_nvl_buffer = buffer_ptrs_[nvl_rank];
         void* slot_in_dst_nvl_buffer =
-            static_cast<char*>(dst_nvl_buffer) + i * tensor.nbytes();
-        CUDA_CHECK(cudaMemcpyAsync(slot_in_dst_nvl_buffer,
-                                   tensor_list[i].data_ptr(), tensor.nbytes(),
-                                   cudaMemcpyDeviceToDevice, comm_stream_));
+            static_cast<char*>(dst_nvl_buffer) + rank * tensor.nbytes();
+        CUDA_CHECK(cudaMemcpyAsync(slot_in_dst_nvl_buffer, ptr, 
+                                   tensor.nbytes(), cudaMemcpyDeviceToDevice,
+                                   comm_streams_[nvl_rank_]));
       }
     }
   }
 
-  // Ensure data is finished copying from leader rank before other ranks start
-  // reading.
+  // Ensure data is finished copying from leader rank 
+  // before other ranks start reading.
   sync::barrier(barrier_signal_ptrs_gpu_, nvl_rank_, NUM_MAX_NVL_PEERS,
-                comm_stream_);
+                comm_streams_[nvl_rank_]);
 
-  // 3. Non-leader_rank copy from buffer into tensor_list.
+  // 3. Non-leader ranks copy from buffer into tensor_list.
   if (nvl_rank_ != leader_rank) {
     void* src_nvl_buffer = buffer_ptrs_[nvl_rank_];
     for (int i = 0; i < num_ranks_; ++i) {
@@ -110,12 +107,12 @@ void Buffer::internode_all_gather(std::vector<torch::Tensor>& tensor_list,
           static_cast<char*>(src_nvl_buffer) + i * tensor.nbytes();
       CUDA_CHECK(cudaMemcpyAsync(tensor_list[i].data_ptr(),
                                  slot_in_src_nvl_buffer, tensor.nbytes(),
-                                 cudaMemcpyDeviceToDevice, comm_stream_));
+                                 cudaMemcpyDeviceToDevice, comm_streams_[nvl_rank_]));
     }
   }
 
   if (!async_op) {
-    CUDA_CHECK(cudaStreamSynchronize(comm_stream_));
+    CUDA_CHECK(cudaStreamSynchronize(comm_streams_[nvl_rank_]));
   }
 }
 
