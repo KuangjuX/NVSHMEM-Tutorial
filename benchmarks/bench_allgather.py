@@ -104,13 +104,13 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         # Warm-up
         for _ in range(warmup_iters):
             dist.all_gather(output_list, tensor, group=dist.group.WORLD)
+        torch.cuda.synchronize()  # Ensure all previous GPU work is done
 
         # Reset output_list
         for output in output_list:
             output = 0 * output
 
         # Measurement
-        torch.cuda.synchronize()  # Ensure all previous GPU work is done
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
         dist.barrier()
@@ -161,13 +161,13 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         # Warm-up
         for _ in range(warmup_iters):
             nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
+        torch.cuda.synchronize()
 
         # Reset output_list
         for output in output_list:
             output = 0 * output
-            
+
         # Measurement(Async)
-        torch.cuda.synchronize()
         start_event.record()
         for _ in range(benchmark_iters):
             nvshmem_buffer.all_gather(output_list, tensor, async_op=True)
