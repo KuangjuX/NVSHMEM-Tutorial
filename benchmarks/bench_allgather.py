@@ -92,7 +92,8 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
 
     for size_kb in tensor_sizes_kb:
         num_elements = (size_kb * 1024) // dtype.itemsize
-        tensor = torch.randn(num_elements, dtype=dtype, device="cuda")
+        tensor = torch.ones(num_elements, dtype=dtype, device="cuda")
+        tensor = tensor * rank  # Rank ID as input
         tensor_bytes = tensor.numel() * tensor.element_size()
 
         # --- Prepare output tensors ---
@@ -103,6 +104,10 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         # Warm-up
         for _ in range(warmup_iters):
             dist.all_gather(output_list, tensor, group=dist.group.WORLD)
+
+        # Reset output_list
+        for output in output_list:
+            output = 0 * output
 
         # Measurement
         torch.cuda.synchronize()  # Ensure all previous GPU work is done
@@ -148,11 +153,19 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         # end_event.synchronize()
         nccl_time_ms = start_event.elapsed_time(end_event) / benchmark_iters
 
+        # Data check
+        for i, output in enumerate(output_list):
+            torch.testing.assert_close(output, i * torch.ones_like(tensor))
+
         # --- NVSHMEM Benchmark ---
         # Warm-up
         for _ in range(warmup_iters):
             nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
 
+        # Reset output_list
+        for output in output_list:
+            output = 0 * output
+            
         # Measurement(Async)
         torch.cuda.synchronize()
         start_event.record()
@@ -163,6 +176,10 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
 
         torch.cuda.synchronize()
         nvshmem_time_ms = start_event.elapsed_time(end_event) / benchmark_iters
+
+        # Data check
+        for i, output in enumerate(output_list):
+            torch.testing.assert_close(output, i * torch.ones_like(tensor))
 
         # --- Calculate Bandwidth and Report Results ---
         # Bandwidth formula: (world_size - 1) * tensor_size / time
