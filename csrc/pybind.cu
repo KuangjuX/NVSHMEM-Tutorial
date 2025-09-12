@@ -15,6 +15,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
   py::class_<Buffer>(m, "Buffer")
       .def(py::init<int, int, int64_t, int64_t>())
+      .def("intranode_barrier", &Buffer::intranode_barrier)
       .def("get_local_ipc_handle", &Buffer::get_local_ipc_handle)
       .def("get_local_buffer_u8", &Buffer::get_local_buffer_u8)
       .def("sync", &Buffer::sync)

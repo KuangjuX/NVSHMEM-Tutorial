@@ -27,6 +27,8 @@ class Buffer {
       const std::vector<int>& device_ids,
       const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
       const std::optional<py::bytearray>& root_unique_id_opt);
+    
+  void intranode_barrier();
 
   // Intra-node (NVLink) helpers
   py::bytearray get_local_ipc_handle() const;
@@ -110,7 +112,8 @@ class Buffer {
 
   bool low_latency_mode_{false};
 
-  at::cuda::CUDAStream comm_stream_;
+  // Use comm_streams_[nvl_rank_] as main stream.
+  std::vector<at::cuda::CUDAStream> comm_streams_;
 
   bool destroyed_{false};
 };
