@@ -103,10 +103,10 @@ void Buffer::intranode_all_to_all(torch::Tensor input, torch::Tensor output,
   //     input.data_ptr(), output.data_ptr(),
   //     input_split_sizes.data_ptr<int64_t>(),
   //     output_split_sizes.data_ptr<int64_t>(), buffer_ptrs_gpu_, local_pe_,
-  //     num_local_pes_, num_device_sms_, comm_streams_[0]);
+  //     num_local_pes_, num_device_sms_, comm_streams_[nvl_rank_]);
 
   if (!async_op) {
-    cudaStreamSynchronize(comm_streams_[0]);
+    cudaStreamSynchronize(comm_streams_[nvl_rank_]);
   }
 }
 }  // namespace nvshmem_tutorial

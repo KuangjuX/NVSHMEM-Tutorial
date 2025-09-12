@@ -191,7 +191,7 @@ pybind11::bytearray Buffer::get_local_nvshmem_unique_id() const {
   return {reinterpret_cast<const char*>(unique_id.data()), unique_id.size()};
 }
 
-void Buffer::sync_barrier() {
+void Buffer::intranode_barrier() {
   sync::barrier(barrier_signal_ptrs_gpu_, nvl_rank_, num_nvl_ranks_,
                 comm_streams_[nvl_rank_]);
 }

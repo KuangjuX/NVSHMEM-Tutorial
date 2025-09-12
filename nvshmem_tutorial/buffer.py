@@ -136,5 +136,5 @@ class NvshmemBuffer:
         """Check if the rank is the same RDMA rank."""
         return self.rank // 8 == rank // 8
 
-    def sync_barrier(self):
-        self.runtime.sync_barrier()
+    def intranode_barrier(self):
+        self.runtime.intranode_barrier()

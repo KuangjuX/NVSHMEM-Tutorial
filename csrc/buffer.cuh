@@ -28,7 +28,7 @@ class Buffer {
       const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
       const std::optional<py::bytearray>& root_unique_id_opt);
     
-  void sync_barrier();
+  void intranode_barrier();
 
   // Intra-node (NVLink) helpers
   py::bytearray get_local_ipc_handle() const;
