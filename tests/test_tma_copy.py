@@ -1,12 +1,12 @@
 import torch
-import pytest
 import nvshmem_tutorial
 
 
 def test_tma_copy_uint8():
     """Test TMA copy with uint8 tensors."""
     if not torch.cuda.is_available():
-        pytest.skip("CUDA not available")
+        print("CUDA not available")
+        return
 
     # Create input tensor on GPU with uint8 dtype
     size = (1024, 1024)

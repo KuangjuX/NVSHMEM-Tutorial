@@ -15,10 +15,11 @@ def get_cuda_root():
 
 
 cuda_root = get_cuda_root()
-
 nvshmem_home = os.environ.get("NVSHMEM_HOME", "/opt/nvshmem")
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
 include_dirs = [
+    os.path.join(current_dir, "csrc"),  # Add csrc directory to include path
     os.path.join(nvshmem_home, "include"),
     os.path.join(cuda_root, "include"),
 ]

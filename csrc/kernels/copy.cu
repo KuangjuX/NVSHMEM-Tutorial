@@ -1,12 +1,15 @@
 #include "kernels/copy.cuh"
 
+#include <ATen/cuda/CUDAContext.h>
+
 namespace nvshmem_tutorial::kernels {
 
 template <typename DType, const int kChunkSize>
 __global__ void tma_copy_kernel(const DType* input, DType* output,
                                 int total_bytes) {
   // Declare shared memory array for storing data chunks during transfer
-  extern __shared__ DType smem[kChunkSize];
+  // Ensure proper alignment for TMA operations
+  __shared__ alignas(128) DType smem[kChunkSize];
 
   // Shared memory barrier pointer for synchronizing TMA operations
   __shared__ uint64_t mbar_ptr;
@@ -20,17 +23,29 @@ __global__ void tma_copy_kernel(const DType* input, DType* output,
   // Synchronize all threads in the block after barrier initialization
   __syncthreads();
 
+  // Initialize phase for barrier synchronization
+  uint32_t phase = 0;
+
   // Process data in chunks across multiple thread blocks
   // Each block handles chunks at stride intervals to distribute work
-  for (offset = blockIdx.x * kChunkSize; offset < total_bytes;
+  for (int offset = blockIdx.x * kChunkSize; offset < total_bytes;
        offset += gridDim.x * kChunkSize) {
+    // Calculate remaining bytes to avoid out-of-bounds access
+    int remaining_bytes = total_bytes - offset;
+    if (remaining_bytes <= 0) break;
+
+    // Calculate the actual number of bytes to copy for this chunk
+    int copy_bytes = min(remaining_bytes, (int)(sizeof(DType) * kChunkSize));
+
+    // Ensure copy_bytes is aligned to 16-byte boundary for TMA operations
+    copy_bytes = (copy_bytes + 15) & ~15;
+
+    // Make sure we don't exceed the remaining bytes after alignment
+    copy_bytes = min(copy_bytes, remaining_bytes);
+
     // Calculate input and output pointers for current chunk
     const DType* input_ptr = input + offset;
     DType* output_ptr = output + offset;
-
-    // Calculate the number of bytes to copy for this chunk
-    // TODO(Kuangjux): Determine the copy bytes more precisely for edge cases
-    int copy_bytes = sizeof(DType) * kChunkSize;
 
     // Only thread 0 initiates TMA operations to avoid race conditions
     if (tid == 0) {
@@ -74,11 +89,11 @@ void tma_copy_host(const DType* input, DType* output, int total_bytes,
   SETUP_LAUNCH_CONFIG(grid_size, 256, stream);
 
   // Set shared memory for TMA if needed
-  SET_SHARED_MEMORY_FOR_TMA(tma_load_kernel<DType, kChunkSize>);
+  auto kernel = tma_copy_kernel<DType, kChunkSize>;
+  SET_SHARED_MEMORY_FOR_TMA(kernel);
 
   // Launch the kernel
-  LAUNCH_KERNEL(&cfg, tma_load_kernel<DType, kChunkSize>, input, output,
-                total_bytes);
+  LAUNCH_KERNEL(&cfg, kernel, input, output, total_bytes);
 }
 
 void tma_copy(const torch::Tensor& input, torch::Tensor& output) {
@@ -86,20 +101,19 @@ void tma_copy(const torch::Tensor& input, torch::Tensor& output) {
   HOST_ASSERT(input.is_cuda() && output.is_cuda());
   HOST_ASSERT(input.dtype() == output.dtype());
   HOST_ASSERT(input.numel() == output.numel());
-  HOST_ASSERT(input.dtype() == torch::kUInt8,
-              "Only uint8 tensors are supported for TMA copy");
+  HOST_ASSERT(input.dtype() == torch::kUInt8);
 
   // Get tensor properties
   int total_bytes = input.numel() * input.element_size();
 
-  // Use the main communication stream
-  cudaStream_t stream = comm_streams_[nvl_rank_].stream();
+  // Use the current CUDA stream
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
 
   // Call TMA copy with uint8 data type
   constexpr int kChunkSize = 4096;  // 4KB chunks for uint8
-  kernels::tma_copy_host<uint8_t, kChunkSize>(input.data_ptr<uint8_t>(),
-                                              output.data_ptr<uint8_t>(),
-                                              total_bytes, stream);
+  tma_copy_host<uint8_t, kChunkSize>(input.data_ptr<uint8_t>(),
+                                     output.data_ptr<uint8_t>(), total_bytes,
+                                     stream);
 }
 
 }  // namespace nvshmem_tutorial::kernels
