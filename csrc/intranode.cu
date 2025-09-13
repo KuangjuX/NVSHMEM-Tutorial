@@ -132,25 +132,38 @@ void Buffer::intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
     throw std::runtime_error("Local NVLink buffer not allocated");
   }
 
+  cudaEvent_t tensors_are_ready;
+  CUDA_CHECK(cudaEventCreate(&tensors_are_ready));
+
   // Copy tensor to local NVLink buffer
   CUDA_CHECK(cudaMemcpyAsync(buffer_ptrs_[nvl_rank_], tensor.data_ptr(),
                              num_bytes, cudaMemcpyDeviceToDevice,
-                             comm_stream_));
+                             comm_streams_[nvl_rank_]));
 
-  sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_, comm_stream_);
+  // Ensure input has been copied into NVLink buffer.
+  sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_, comm_streams_[nvl_rank_]);
+
+  // Record an event in comm_streams_[nvl_rank_] for other ranks to sync.
+  CUDA_CHECK(cudaEventRecord(tensors_are_ready, comm_streams_[nvl_rank_]));
 
   for (int pe = 0; pe < num_nvl_ranks_; ++pe) {
     if (buffer_ptrs_[pe] == nullptr) {
       throw std::runtime_error("buffer_ptrs_[pe] is nullptr");
     }
 
+    if (pe != nvl_rank_) {
+      // Ensure data is copied into NVLink buffer on comm_streams_[nvl_rank_].
+      CUDA_CHECK(cudaStreamWaitEvent(comm_streams_[pe], tensors_are_ready, 0));
+    }
     CUDA_CHECK(cudaMemcpyAsync(tensor_list[pe].data_ptr(), buffer_ptrs_[pe],
                                num_bytes, cudaMemcpyDeviceToDevice,
-                               comm_stream_));
+                               comm_streams_[pe]));
   }
 
   if (!async_op) {
-    cudaStreamSynchronize(comm_stream_);
+    for (int pe = 0; pe < num_nvl_ranks_; ++pe) {
+      cudaStreamSynchronize(comm_streams_[pe]);
+    }
   }
 }
 
@@ -174,10 +187,10 @@ void Buffer::intranode_all_to_all(torch::Tensor input, torch::Tensor output,
   //     input.data_ptr(), output.data_ptr(),
   //     input_split_sizes.data_ptr<int64_t>(),
   //     output_split_sizes.data_ptr<int64_t>(), buffer_ptrs_gpu_, local_pe_,
-  //     num_local_pes_, num_device_sms_, comm_stream_);
+  //     num_local_pes_, num_device_sms_, comm_streams_[nvl_rank_]);
 
   if (!async_op) {
-    cudaStreamSynchronize(comm_stream_);
+    cudaStreamSynchronize(comm_streams_[nvl_rank_]);
   }
 }
 }  // namespace nvshmem_tutorial

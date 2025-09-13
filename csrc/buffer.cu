@@ -16,8 +16,7 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
     : rank_{rank},
       num_ranks_{num_ranks},
       num_nvl_bytes_{num_nvl_bytes},
-      num_rdma_bytes_{num_rdma_bytes},
-      comm_stream_(at::cuda::getStreamFromPool(true)) {
+      num_rdma_bytes_{num_rdma_bytes} {
   CUDA_CHECK(cudaGetDevice(&device_id_));
   query_local_pe(local_pe_, num_local_pes_);
 
@@ -29,6 +28,11 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
   int64_t barrier_signal_bytes = NUM_MAX_NVL_PEERS * sizeof(int);
   int64_t buffer_ptr_bytes = NUM_MAX_NVL_PEERS * sizeof(void*);
   int64_t barrier_signal_ptr_bytes = NUM_MAX_NVL_PEERS * sizeof(int*);
+
+  // Get comm_streams_ from torch stream pool.
+  for (int i = 0; i < NUM_MAX_NVL_PEERS; ++i) {
+    comm_streams_.emplace_back(at::cuda::getStreamFromPool(true));
+  }
 
   // Get ranks
   CUDA_CHECK(cudaGetDevice(&device_id_));
@@ -64,7 +68,7 @@ Buffer::Buffer(int rank, int num_ranks, int64_t num_nvl_bytes,
 
     // Do not synchronize here, will be synchronized in sync()
     CUDA_CHECK(cudaMemsetAsync(barrier_signal_ptrs_[nvl_rank_], 0,
-                               barrier_signal_bytes, comm_stream_));
+                               barrier_signal_bytes, comm_streams_[nvl_rank_]));
   }
 }
 
@@ -187,6 +191,11 @@ pybind11::bytearray Buffer::get_local_nvshmem_unique_id() const {
   return {reinterpret_cast<const char*>(unique_id.data()), unique_id.size()};
 }
 
+void Buffer::intranode_barrier() {
+  sync::barrier(barrier_signal_ptrs_gpu_, nvl_rank_, num_nvl_ranks_,
+                comm_streams_[nvl_rank_]);
+}
+
 void Buffer::destroy() {
   HOST_ASSERT(destroyed_ == false);
   // Synchronize
@@ -194,7 +203,7 @@ void Buffer::destroy() {
   // Close CUDA IPC
   if (is_available() && num_nvl_bytes_ > 0) {
     sync::barrier(barrier_signal_ptrs_gpu_, nvl_rank_, num_nvl_ranks_,
-                  comm_stream_);
+                  comm_streams_[nvl_rank_]);
 
     CUDA_CHECK(cudaDeviceSynchronize());
 
