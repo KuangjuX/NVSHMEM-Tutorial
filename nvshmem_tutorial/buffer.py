@@ -137,8 +137,8 @@ class NvshmemBuffer:
     def all_gather_into_tensor(self, output_tensor, tensor, async_op=False):
         if not tensor.is_cuda:
             raise ValueError("Tensor must be CUDA tensor")
-        if len(tensor_list) != self.group_size:
-            raise ValueError("Tensor list must match group size")
+        if output_tensor.shape[0] != self.group_size:
+            raise ValueError("output tensor must match group size")
         if self.num_rdma_ranks > 1:
             raise ValueError("Only support intranode all-gather for now")
         self.runtime.intranode_all_gather(output_tensor, tensor, async_op)
