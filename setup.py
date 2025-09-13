@@ -50,6 +50,7 @@ setup(
                 "csrc/intranode.cu",
                 "csrc/internode.cu",
                 "csrc/pybind.cu",
+                "csrc/kernels/copy.cu",
             ],
             include_dirs=include_dirs,
             library_dirs=library_dirs,
@@ -85,9 +86,4 @@ setup(
     install_requires=[
         "torch",
     ],
-    # extras_require={
-    #     "dev": [
-    #         "ring-flash-attn",
-    #     ],
-    # },
 )

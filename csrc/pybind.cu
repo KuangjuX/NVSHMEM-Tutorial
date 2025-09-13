@@ -1,5 +1,6 @@
 
 #include "buffer.cuh"
+#include "kernels/copy.cuh"
 #include "nvshmem.hpp"
 
 #include <pybind11/chrono.h>
@@ -68,4 +69,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("nvshmem_put_tensor_async", &nvshmem::put_tensor_async,
         "Put memory with NVSHMEM asynchronously", py::arg("remote_tensor"),
         py::arg("local_tensor"), py::arg("nbytes"), py::arg("rank"));
+
+  // Experiment APIs for tests.
+  m.def("tma_copy", &kernels::tma_copy, "TMA copy", py::arg("input"),
+        py::arg("output"));
 }

@@ -1,94 +1,10 @@
 #include "buffer.cuh"
-#include "launch.cuh"
-#include "ptx_wrapper.cuh"
 #include "sync.cuh"
 #include "utils.hpp"
 
 #include <torch/torch.h>
 
 namespace nvshmem_tutorial {
-
-namespace kernels {
-template <typename DType, const int kChunkSize>
-__global__ void tma_load_kernel(const DType* input, DType* output,
-                                int total_bytes) {
-  // Declare shared memory array for storing data chunks during transfer
-  extern __shared__ DType smem[kChunkSize];
-
-  // Shared memory barrier pointer for synchronizing TMA operations
-  __shared__ uint64_t mbar_ptr;
-  int tid = threadIdx.x;
-
-  // Initialize memory barrier - only thread 0 performs initialization
-  if (tid == 0) {
-    mbarrier_init(&mbar_ptr, 1);
-  }
-
-  // Synchronize all threads in the block after barrier initialization
-  __syncthreads();
-
-  // Process data in chunks across multiple thread blocks
-  // Each block handles chunks at stride intervals to distribute work
-  for (offset = blockIdx.x * kChunkSize; offset < total_bytes;
-       offset += gridDim.x * kChunkSize) {
-    // Calculate input and output pointers for current chunk
-    const DType* input_ptr = input + offset;
-    DType* output_ptr = output + offset;
-
-    // Calculate the number of bytes to copy for this chunk
-    // TODO(Kuangjux): Determine the copy bytes more precisely for edge cases
-    int copy_bytes = sizeof(DType) * kChunkSize;
-
-    // Only thread 0 initiates TMA operations to avoid race conditions
-    if (tid == 0) {
-      // Launch a TMA (Tensor Memory Access) load operation from global memory
-      // (input_ptr) to shared memory (smem).
-      tma_load_1d(input_ptr, smem, &mbar_ptr, copy_bytes);
-      // Arrive at the memory barrier and expect a transaction of copy_bytes to
-      // synchronize the transfer.
-      mbarrier_arrive_and_expect_tx(&mbar_ptr, copy_bytes);
-    }
-
-    // Wait for TMA load operation to complete using the barrier
-    mbarrier_wait(&mbar_ptr, phase);
-
-    // Store data from shared memory back to global memory
-    if (tid == 0) {
-      tma_store_1d(smem, output_ptr, copy_bytes);
-    }
-
-    // Wait for TMA store operation to complete
-    tma_store_wait<0>();
-
-    // Synchronize all threads before processing next chunk
-    __syncthreads();
-  }
-}
-
-template <typename DType, const int kChunkSize>
-void tma_load_host(const DType* input, DType* output, int total_bytes,
-                   cudaStream_t stream) {
-  // Calculate grid size based on total bytes and chunk size
-  int num_chunks = (total_bytes + kChunkSize * sizeof(DType) - 1) /
-                   (kChunkSize * sizeof(DType));
-  int grid_size =
-      std::min(num_chunks, 256);  // Limit grid size to avoid too many blocks
-
-  // Calculate shared memory size
-  size_t smem_size = kChunkSize * sizeof(DType);
-
-  // Setup launch configuration
-  SETUP_LAUNCH_CONFIG(grid_size, 256, stream);
-
-  // Set shared memory for TMA if needed
-  SET_SHARED_MEMORY_FOR_TMA(tma_load_kernel<DType, kChunkSize>);
-
-  // Launch the kernel
-  LAUNCH_KERNEL(&cfg, tma_load_kernel<DType, kChunkSize>, input, output,
-                total_bytes);
-}
-
-}  // namespace kernels
 
 void Buffer::intranode_send(const torch::Tensor& tensor, int rank) {
   if (!tensor.is_cuda()) {
@@ -141,7 +57,8 @@ void Buffer::intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
                              comm_streams_[nvl_rank_]));
 
   // Ensure input has been copied into NVLink buffer.
-  sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_, comm_streams_[nvl_rank_]);
+  sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_,
+                comm_streams_[nvl_rank_]);
 
   // Record an event in comm_streams_[nvl_rank_] for other ranks to sync.
   CUDA_CHECK(cudaEventRecord(tensors_are_ready, comm_streams_[nvl_rank_]));
