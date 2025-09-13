@@ -57,7 +57,8 @@ void Buffer::intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
                              comm_streams_[nvl_rank_]));
 
   // Ensure input has been copied into NVLink buffer.
-  sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_, comm_streams_[nvl_rank_]);
+  sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_,
+                comm_streams_[nvl_rank_]);
 
   // Record an event in comm_streams_[nvl_rank_] for other ranks to sync.
   CUDA_CHECK(cudaEventRecord(tensors_are_ready, comm_streams_[nvl_rank_]));
