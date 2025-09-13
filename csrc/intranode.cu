@@ -32,17 +32,18 @@ void Buffer::intranode_recv(torch::Tensor& tensor, int rank) {
                         tensor.nbytes(), cudaMemcpyDeviceToDevice));
 }
 
-void Buffer::intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
+void Buffer::intranode_all_gather(torch::Tensor& output_tensor,
                                   const torch::Tensor& tensor, bool async_op) {
   if (!tensor.is_cuda()) {
     throw std::runtime_error("intranode_all_gather expects CUDA tensor");
   }
 
-  if (static_cast<int>(tensor_list.size()) != num_nvl_ranks_) {
-    throw std::runtime_error("tensor_list size must match num_nvl_ranks");
+  if (static_cast<int>(output_tensor.nbytes() / tensor.nbytes()) != num_nvl_ranks_) {
+    throw std::runtime_error("output_tensor size must match num_nvl_ranks");
   }
 
   int64_t num_bytes = tensor.nbytes();
+  char *output_ptr = static_cast<char*>(output_tensor.data_ptr());
 
   if (buffer_ptrs_[nvl_rank_] == nullptr) {
     throw std::runtime_error("Local NVLink buffer not allocated");
@@ -66,12 +67,12 @@ void Buffer::intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
     if (buffer_ptrs_[pe] == nullptr) {
       throw std::runtime_error("buffer_ptrs_[pe] is nullptr");
     }
-
     if (pe != nvl_rank_) {
       // Ensure data is copied into NVLink buffer on comm_streams_[nvl_rank_].
       CUDA_CHECK(cudaStreamWaitEvent(comm_streams_[pe], tensors_are_ready, 0));
     }
-    CUDA_CHECK(cudaMemcpyAsync(tensor_list[pe].data_ptr(), buffer_ptrs_[pe],
+    void *dst_slot_ptr = output_ptr + pe * num_bytes;
+    CUDA_CHECK(cudaMemcpyAsync(dst_slot_ptr, buffer_ptrs_[pe],
                                num_bytes, cudaMemcpyDeviceToDevice,
                                comm_streams_[pe]));
   }

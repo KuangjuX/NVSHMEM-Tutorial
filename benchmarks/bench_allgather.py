@@ -97,7 +97,6 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
 
         # --- Prepare output tensors ---
         # Use the same tensor_list to reduce allocations.
-        output_list = [torch.empty_like(tensor) for _ in range(world_size)]
         output_matrix = torch.empty((world_size, num_elements), dtype=dtype, device=device)
 
         # --- NCCL Benchmark ---
@@ -159,17 +158,16 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         # --- NVSHMEM Benchmark ---
         # Warm-up
         for _ in range(warmup_iters):
-            nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
+            nvshmem_buffer.all_gather_into_tensor(output_matrix, tensor, async_op=False)
         torch.cuda.synchronize()
 
         # Reset output_list
-        for output in output_list:
-            output = 0 * output
+        output_matrix = output_matrix * 0
 
         # Measurement(Async)
         start_event.record()
         for _ in range(benchmark_iters):
-            nvshmem_buffer.all_gather(output_list, tensor, async_op=True)
+            nvshmem_buffer.all_gather_into_tensor(output_matrix, tensor, async_op=True)
         torch.cuda.synchronize()
         end_event.record()
 
@@ -177,8 +175,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         nvshmem_time_ms = start_event.elapsed_time(end_event) / benchmark_iters
 
         # Data check
-        for i, output in enumerate(output_list):
-            torch.testing.assert_close(output, i * torch.ones_like(tensor))
+        torch.testing.assert_close(output_matrix, ref_output_matrix)
 
         # --- Calculate Bandwidth and Report Results ---
         # Bandwidth formula: (world_size - 1) * tensor_size / time

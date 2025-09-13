@@ -42,7 +42,7 @@ class Buffer {
   // Receives a tensor synchronously.
   void intranode_recv(torch::Tensor& tensor, int rank);
   // Gathers tensors from the whole group in a list.
-  void intranode_all_gather(std::vector<torch::Tensor>& tensor_list,
+  void intranode_all_gather(torch::Tensor& output_tensor,
                             const torch::Tensor& tensor, bool async_op);
 
   void intranode_all_to_all(torch::Tensor input, torch::Tensor output,
