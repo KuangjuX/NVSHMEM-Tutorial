@@ -30,22 +30,13 @@ __global__ void tma_copy_kernel(const DType* input, DType* output,
   // Each block handles chunks at stride intervals to distribute work
   for (int offset = blockIdx.x * kChunkSize; offset < total_bytes;
        offset += gridDim.x * kChunkSize) {
-    // Calculate remaining bytes to avoid out-of-bounds access
-    int remaining_bytes = total_bytes - offset;
-    if (remaining_bytes <= 0) break;
-
-    // Calculate the actual number of bytes to copy for this chunk
-    int copy_bytes = min(remaining_bytes, (int)(sizeof(DType) * kChunkSize));
-
-    // Ensure copy_bytes is aligned to 16-byte boundary for TMA operations
-    copy_bytes = (copy_bytes + 15) & ~15;
-
-    // Make sure we don't exceed the remaining bytes after alignment
-    copy_bytes = min(copy_bytes, remaining_bytes);
-
     // Calculate input and output pointers for current chunk
     const DType* input_ptr = input + offset;
     DType* output_ptr = output + offset;
+
+    // Calculate the number of bytes to copy for this chunk
+    // TODO(Kuangjux): Determine the copy bytes more precisely for edge cases
+    int copy_bytes = sizeof(DType) * kChunkSize;
 
     // Only thread 0 initiates TMA operations to avoid race conditions
     if (tid == 0) {

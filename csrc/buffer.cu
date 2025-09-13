@@ -243,5 +243,4 @@ bool Buffer::is_same_rdma_rank(int rank) const {
   return rank / NUM_MAX_NVL_PEERS == rdma_rank_;
 }
 
-
 }  // namespace nvshmem_tutorial
