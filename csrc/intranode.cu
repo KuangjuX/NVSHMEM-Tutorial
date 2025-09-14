@@ -42,45 +42,65 @@ void Buffer::intranode_all_gather(torch::Tensor& output_tensor,
     throw std::runtime_error("output_tensor size must match num_nvl_ranks");
   }
 
-  int64_t num_bytes = tensor.nbytes();
-  char *output_ptr = static_cast<char*>(output_tensor.data_ptr());
-
   if (buffer_ptrs_[nvl_rank_] == nullptr) {
     throw std::runtime_error("Local NVLink buffer not allocated");
   }
 
-  cudaEvent_t tensors_are_ready;
-  CUDA_CHECK(cudaEventCreate(&tensors_are_ready));
+  int prev_rank = (nvl_rank_ - 1 + num_nvl_ranks_) % num_nvl_ranks_;
+  int next_rank = (nvl_rank_ + 1) % num_nvl_ranks_;
+  int64_t num_bytes = tensor.nbytes();
+  int64_t output_size = output_tensor.nbytes();
+  char *output_ptr = static_cast<char*>(output_tensor.data_ptr());
+  auto curr_sig_flag_ptr = reinterpret_cast<CUdeviceptr>(static_cast<char*>(buffer_ptrs_[nvl_rank_]) + output_size);
+  auto next_sig_flag_ptr = reinterpret_cast<CUdeviceptr>(static_cast<char*>(buffer_ptrs_[next_rank]) + output_size);
+  auto curr_ack_flag_ptr = reinterpret_cast<CUdeviceptr>(static_cast<char*>(buffer_ptrs_[nvl_rank_]) + output_size + sizeof(int));
+  auto prev_ack_flag_ptr = reinterpret_cast<CUdeviceptr>(static_cast<char*>(buffer_ptrs_[prev_rank]) + output_size + sizeof(int));
+  void *init_dst_slot_ptr = static_cast<char*>(buffer_ptrs_[next_rank]) + nvl_rank_ * num_bytes;
 
-  // Copy tensor to local NVLink buffer
-  CUDA_CHECK(cudaMemcpyAsync(buffer_ptrs_[nvl_rank_], tensor.data_ptr(),
+  // Copy input into output slot.
+  void *output_dst_slot_ptr = static_cast<char*>(output_ptr) + nvl_rank_ * num_bytes;
+  CUDA_CHECK(cudaMemcpyAsync(output_dst_slot_ptr, tensor.data_ptr(),
                              num_bytes, cudaMemcpyDeviceToDevice,
+                             comm_streams_[prev_rank]));
+
+  // Send input to next rank.
+  CUDA_CHECK(cudaMemcpyAsync(init_dst_slot_ptr, tensor.data_ptr(), 
+                             num_bytes, cudaMemcpyDeviceToDevice, 
                              comm_streams_[nvl_rank_]));
 
-  // Ensure input has been copied into NVLink buffer.
-  sync::barrier(barrier_signal_ptrs_gpu_, rank_, num_ranks_, comm_streams_[nvl_rank_]);
+  // Run the ring for world_size - 1 steps.
+  for (int step = 1; step < num_nvl_ranks_; ++step) {
+    // Write sig to next rank.
+    cuStreamWriteValue32(comm_streams_[nvl_rank_], next_sig_flag_ptr, step - 1, 0);
 
-  // Record an event in comm_streams_[nvl_rank_] for other ranks to sync.
-  CUDA_CHECK(cudaEventRecord(tensors_are_ready, comm_streams_[nvl_rank_]));
+    // Wait signal from prev rank.
+    cuStreamWaitValue32(comm_streams_[nvl_rank_], curr_sig_flag_ptr, step - 1, 0);
+    cuStreamWaitValue32(comm_streams_[prev_rank], curr_sig_flag_ptr, step - 1, 0);
 
-  for (int pe = 0; pe < num_nvl_ranks_; ++pe) {
-    if (buffer_ptrs_[pe] == nullptr) {
-      throw std::runtime_error("buffer_ptrs_[pe] is nullptr");
-    }
-    if (pe != nvl_rank_) {
-      // Ensure data is copied into NVLink buffer on comm_streams_[nvl_rank_].
-      CUDA_CHECK(cudaStreamWaitEvent(comm_streams_[pe], tensors_are_ready, 0));
-    }
-    void *dst_slot_ptr = output_ptr + pe * num_bytes;
-    CUDA_CHECK(cudaMemcpyAsync(dst_slot_ptr, buffer_ptrs_[pe],
+    // Send the received data to next rank.
+    uint64_t offset = ((nvl_rank_ - step + num_nvl_ranks_) % num_nvl_ranks_) * num_bytes;
+    void *nvl_src_slot_ptr = static_cast<char*>(buffer_ptrs_[nvl_rank_]) + offset;
+    void *nvl_dst_slot_ptr = static_cast<char*>(buffer_ptrs_[next_rank]) + offset;
+    CUDA_CHECK(cudaMemcpyAsync(nvl_dst_slot_ptr, nvl_src_slot_ptr,
                                num_bytes, cudaMemcpyDeviceToDevice,
-                               comm_streams_[pe]));
+                               comm_streams_[nvl_rank_]));
+
+    // Copy the received data to output tensor, overlapped with NVLink transfer.
+    void *output_dst_slot_ptr = static_cast<char*>(output_ptr) + offset;
+    CUDA_CHECK(cudaMemcpyAsync(output_dst_slot_ptr, nvl_src_slot_ptr,
+                               num_bytes, cudaMemcpyDeviceToDevice,
+                               comm_streams_[prev_rank]));
+      
+    // Write ack to prev rank.
+    cuStreamWriteValue32(comm_streams_[nvl_rank_], prev_ack_flag_ptr, step, 0);
+
+    // Wait ack from next rank.
+    cuStreamWaitValue32(comm_streams_[nvl_rank_], curr_ack_flag_ptr, step, 0);
   }
 
   if (!async_op) {
-    for (int pe = 0; pe < num_nvl_ranks_; ++pe) {
-      cudaStreamSynchronize(comm_streams_[pe]);
-    }
+    cudaStreamSynchronize(comm_streams_[prev_rank]);
+    cudaStreamSynchronize(comm_streams_[nvl_rank_]);
   }
 }
 

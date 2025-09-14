@@ -98,6 +98,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         # --- Prepare output tensors ---
         # Use the same tensor_list to reduce allocations.
         output_matrix = torch.empty((world_size, num_elements), dtype=dtype, device=device)
+        ref_output_matrix = torch.stack([torch.full((num_elements,), r, dtype=dtype, device=device) for r in range(world_size)])
 
         # --- NCCL Benchmark ---
         # Warm-up
@@ -152,7 +153,6 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         nccl_time_ms = start_event.elapsed_time(end_event) / benchmark_iters
 
         # Data check
-        ref_output_matrix = torch.stack([torch.full((num_elements,), r, dtype=dtype, device=device) for r in range(world_size)])
         torch.testing.assert_close(output_matrix, ref_output_matrix)
 
         # --- NVSHMEM Benchmark ---
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     rank, world_size, group = init_dist()
     print(f"Global rank = {rank}, world_size = {world_size}")
 
-    buffer_size = 4 * 1024 * 1024 * 1024
+    buffer_size = 4 * 1024 * 1024 * 1024 + 1024
 
     if rank == 0:
         print(f"Buffer size = {buffer_size/1024/1024} MB")
