@@ -27,7 +27,7 @@ class Buffer {
       const std::vector<int>& device_ids,
       const std::vector<std::optional<py::bytearray>>& all_gathered_handles,
       const std::optional<py::bytearray>& root_unique_id_opt);
-    
+
   void intranode_barrier();
 
   // Intra-node (NVLink) helpers
@@ -52,7 +52,6 @@ class Buffer {
   void internode_all_gather(std::vector<torch::Tensor>& tensor_list,
                             const torch::Tensor& tensor, bool async_op);
 
-  // DeepEP-like: view buffers as typed tensor
   torch::Tensor get_local_buffer_tensor(const py::object& dtype, int64_t offset,
                                         bool use_rdma_buffer) const;
 
