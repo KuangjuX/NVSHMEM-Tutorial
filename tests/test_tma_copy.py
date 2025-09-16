@@ -22,6 +22,27 @@ def test_tma_copy_uint8():
     torch.testing.assert_close(input_tensor, output_tensor)
 
 
+def test_tma_copy_float32():
+    """Test TMA copy with float32 tensors."""
+    if not torch.cuda.is_available():
+        print("CUDA not available")
+        return
+
+    # Create input tensor on GPU with float32 dtype
+    size = (512, 512)
+    input_tensor = torch.randn(size, dtype=torch.float32, device="cuda")
+
+    # Create output tensor on GPU
+    output_tensor = torch.zeros_like(input_tensor)
+
+    # Perform TMA copy
+    nvshmem_tutorial.tma_copy(input_tensor, output_tensor)
+
+    # Verify the copy was successful
+    torch.testing.assert_close(input_tensor, output_tensor)
+
+
 if __name__ == "__main__":
     test_tma_copy_uint8()
+    test_tma_copy_float32()
     print("Test passed!")
