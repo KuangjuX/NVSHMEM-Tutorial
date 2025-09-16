@@ -35,8 +35,7 @@ __global__ void tma_copy_kernel(const DType* input, DType* output,
     DType* output_ptr = output + offset;
 
     // Calculate the number of bytes to copy for this chunk
-    // TODO(Kuangjux): Determine the copy bytes more precisely for edge cases
-    int copy_bytes = sizeof(DType) * kChunkSize;
+    int copy_bytes = min(sizeof(DType) * kChunkSize, total_bytes - offset * sizeof(DType));
 
     // Only thread 0 initiates TMA operations to avoid race conditions
     if (tid == 0) {
