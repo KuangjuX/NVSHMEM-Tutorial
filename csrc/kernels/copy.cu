@@ -26,9 +26,11 @@ __global__ void tma_copy_kernel(const DType* input, DType* output,
   // Initialize phase for barrier synchronization
   uint32_t phase = 0;
 
+  int total_elements = total_bytes / sizeof(DType);
+
   // Process data in chunks across multiple thread blocks
   // Each block handles chunks at stride intervals to distribute work
-  for (int offset = blockIdx.x * kChunkSize; offset < total_bytes;
+  for (int offset = blockIdx.x * kChunkSize; offset < total_elements;
        offset += gridDim.x * kChunkSize) {
     // Calculate input and output pointers for current chunk
     const DType* input_ptr = input + offset;
@@ -92,7 +94,8 @@ void tma_copy(const torch::Tensor& input, torch::Tensor& output) {
   HOST_ASSERT(input.is_cuda() && output.is_cuda());
   HOST_ASSERT(input.dtype() == output.dtype());
   HOST_ASSERT(input.numel() == output.numel());
-  HOST_ASSERT(input.dtype() == torch::kUInt8);
+  HOST_ASSERT(input.dtype() == torch::kUInt8 ||
+              input.dtype() == torch::kFloat32);
 
   // Get tensor properties
   int total_bytes = input.numel() * input.element_size();
@@ -100,11 +103,20 @@ void tma_copy(const torch::Tensor& input, torch::Tensor& output) {
   // Use the current CUDA stream
   cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
 
-  // Call TMA copy with uint8 data type
-  constexpr int kChunkSize = 4096;  // 4KB chunks for uint8
-  tma_copy_host<uint8_t, kChunkSize>(input.data_ptr<uint8_t>(),
-                                     output.data_ptr<uint8_t>(), total_bytes,
-                                     stream);
+  if (input.dtype() == torch::kUInt8) {
+    // Call TMA copy with uint8 data type
+    constexpr int kChunkSize = 4096;  // 4KB chunks for uint8
+    tma_copy_host<uint8_t, kChunkSize>(input.data_ptr<uint8_t>(),
+                                       output.data_ptr<uint8_t>(), total_bytes,
+                                       stream);
+  } else if (input.dtype() == torch::kFloat32) {
+    // Call TMA copy with float32 data type
+    constexpr int kChunkSize = 1024;  // 4KB chunks for float32
+    tma_copy_host<float, kChunkSize>(
+        input.data_ptr<float>(), output.data_ptr<float>(), total_bytes, stream);
+  } else {
+    throw std::runtime_error("Unsupported data type");
+  }
 }
 
 }  // namespace nvshmem_tutorial::kernels
