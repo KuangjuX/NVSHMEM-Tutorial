@@ -64,17 +64,21 @@ All benchmarks were conducted on NVIDIA H20 GPUs with NVLink connectivity:
 
 | Type      | Data Size | NCCL (GB/s)     | Hybrid (GB/s)   |
 | --------- |-----------|-----------------|-----------------|
-| Intranode | 4 KB      | 0.18            |    0.54         |
-| Intranode | 16 KB     | 1.00            |    2.12         |
-| Intranode | 64 KB     | 3.63            |    8.10         |
-| Intranode | 256 KB    | 11.13           |    29.30        |
-| Intranode | 1024 KB   | 53.61           |    73.43        |
-| Intranode | 2 MB      | 76.51           |    87.27        |
-| Intranode | 4 MB      | 107.46          |    92.57        |
-| Intranode | 8 MB      | 170.90          |    99.19        |
-| Intranode | 16 MB     | 210.44          |    93.75        |
-| Intranode | 32 MB     | 230.63          |    92.16        |
-| Intranode | 64 MB     | 239.52          |    93.24        |
+| Intranode | 4 KB      | 1.02            |    0.18         |
+| Intranode | 16 KB     | 2.48            |    0.74         |
+| Intranode | 64 KB     | 13.87           |    2.96         |
+| Intranode | 256 KB    | 57.33           |    11.71        |
+| Intranode | 1024 KB   | 126.60          |    41.55        |
+| Intranode | 2 MB      | 198.55          |    73.40        |
+| Intranode | 4 MB      | 234.00          |    118.41       |
+| Intranode | 8 MB      | 280.46          |    172.19       |
+| Intranode | 16 MB     | 308.44          |    188.47       |
+| Intranode | 32 MB     | 328.32          |    204.16       |
+| Intranode | 64 MB     | 336.90          |    216.75       |
+| Intranode | 128 MB    | 345.00          |    225.75       |
+| Intranode | 256 MB    | 352.18          |    230.39       |
+| Intranode | 512 MB    | 356.45          |    232.82       |
+| Intranode | 1024 MB   | 359.75          |    231.51       |
 | Internode | 4 KB      | 0.29            |    0.16         |
 | Internode | 16 kB     | 0.92            |    0.62         |
 | Internode | 64 KB     | 5.40            |    2.39         |
