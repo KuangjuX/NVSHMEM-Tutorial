@@ -71,6 +71,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         128 * 1024,
         256 * 1024,
         512 * 1024,
+        1024 * 1024,
     ]
     dtype = torch.bfloat16
     warmup_iters = 10
@@ -119,7 +120,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
             1. Sync is inevitable because end_event cannot be launched on the same stream as nccl.
 
             2. handle.wait() will yield the main thread, while cudaDeviceSynchronize will spin,
-            just makes the device wait for the completion of previous operations of all streams.
+            just to makes the device wait for the completion of previous operations of all streams.
 
             3. async_all_gather + handle.wait() == sync_all_gather. In this case, 
             handle.wait() inserts an event on NCCL stream and calls cudaStreamWaitEvent()
@@ -164,6 +165,9 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         # Reset output_list
         output_matrix = output_matrix * 0
 
+        # Must wait for the default stream finish resetting output tensor.
+        torch.cuda.current_stream().synchronize()
+
         # Measurement(Async)
         start_event.record()
         for _ in range(benchmark_iters):
@@ -201,7 +205,7 @@ if __name__ == "__main__":
     rank, world_size, group = init_dist()
     print(f"Global rank = {rank}, world_size = {world_size}")
 
-    buffer_size = 4 * 1024 * 1024 * 1024 + 1024
+    buffer_size = 2 * 1024 * 1024 * 1024 + 1024     # Much smaller buffer size.
 
     if rank == 0:
         print(f"Buffer size = {buffer_size/1024/1024} MB")
