@@ -71,6 +71,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         128 * 1024,
         256 * 1024,
         512 * 1024,
+        1024 * 1024,
     ]
     dtype = torch.bfloat16
     warmup_iters = 10
@@ -97,8 +98,8 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
 
         # --- Prepare output tensors ---
         # Use the same tensor_list to reduce allocations.
-        output_list = [torch.empty_like(tensor) for _ in range(world_size)]
         output_matrix = torch.empty((world_size, num_elements), dtype=dtype, device=device)
+        ref_output_matrix = torch.stack([torch.full((num_elements,), r, dtype=dtype, device=device) for r in range(world_size)])
 
         # --- NCCL Benchmark ---
         # Warm-up
@@ -119,7 +120,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
             1. Sync is inevitable because end_event cannot be launched on the same stream as nccl.
 
             2. handle.wait() will yield the main thread, while cudaDeviceSynchronize will spin,
-            just makes the device wait for the completion of previous operations of all streams.
+            just to makes the device wait for the completion of previous operations of all streams.
 
             3. async_all_gather + handle.wait() == sync_all_gather. In this case, 
             handle.wait() inserts an event on NCCL stream and calls cudaStreamWaitEvent()
@@ -153,23 +154,24 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         nccl_time_ms = start_event.elapsed_time(end_event) / benchmark_iters
 
         # Data check
-        ref_output_matrix = torch.stack([torch.full((num_elements,), r, dtype=dtype, device=device) for r in range(world_size)])
         torch.testing.assert_close(output_matrix, ref_output_matrix)
 
         # --- NVSHMEM Benchmark ---
         # Warm-up
         for _ in range(warmup_iters):
-            nvshmem_buffer.all_gather(output_list, tensor, async_op=False)
+            nvshmem_buffer.all_gather_into_tensor(output_matrix, tensor, async_op=False)
         torch.cuda.synchronize()
 
         # Reset output_list
-        for output in output_list:
-            output = 0 * output
+        output_matrix = output_matrix * 0
+
+        # Must wait for the default stream finish resetting output tensor.
+        torch.cuda.current_stream().synchronize()
 
         # Measurement(Async)
         start_event.record()
         for _ in range(benchmark_iters):
-            nvshmem_buffer.all_gather(output_list, tensor, async_op=True)
+            nvshmem_buffer.all_gather_into_tensor(output_matrix, tensor, async_op=True)
         torch.cuda.synchronize()
         end_event.record()
 
@@ -177,8 +179,7 @@ def benchmark_all_gather(nvshmem_buffer: NvshmemBuffer, rank: int, world_size: i
         nvshmem_time_ms = start_event.elapsed_time(end_event) / benchmark_iters
 
         # Data check
-        for i, output in enumerate(output_list):
-            torch.testing.assert_close(output, i * torch.ones_like(tensor))
+        torch.testing.assert_close(output_matrix, ref_output_matrix)
 
         # --- Calculate Bandwidth and Report Results ---
         # Bandwidth formula: (world_size - 1) * tensor_size / time
@@ -204,7 +205,7 @@ if __name__ == "__main__":
     rank, world_size, group = init_dist()
     print(f"Global rank = {rank}, world_size = {world_size}")
 
-    buffer_size = 4 * 1024 * 1024 * 1024
+    buffer_size = 2 * 1024 * 1024 * 1024 + 1024     # Much smaller buffer size.
 
     if rank == 0:
         print(f"Buffer size = {buffer_size/1024/1024} MB")

@@ -5,6 +5,9 @@
 
 #include <cuda/pipeline>
 
+#define PRIME_TAG_START   13
+#define PRIME_TAG_STRIDE  971
+
 #define HOST_DEVICE __forceinline__ __host__ __device__
 #define DEVICE __forceinline__ __device__
 #define HOST __forceinline__ __host__
