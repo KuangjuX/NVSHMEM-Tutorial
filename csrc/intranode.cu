@@ -66,7 +66,7 @@ void Buffer::intranode_all_gather(torch::Tensor& output_tensor,
   void *output_dst_slot_ptr = output_ptr + nvl_rank_ * num_bytes;
   void *nvl_src_slot_ptr = NULL, *nvl_dst_slot_ptr = NULL;
 
-  // Send input to NVLink buffer.
+  // Copy input to NVLink buffer.
   nvl_src_slot_ptr = curr_data_base_ptr + ping * num_bytes;
   CUDA_CHECK(cudaMemcpyAsync(nvl_src_slot_ptr, tensor.data_ptr(), 
                              num_bytes, cudaMemcpyDeviceToDevice, 
@@ -107,7 +107,7 @@ void Buffer::intranode_all_gather(torch::Tensor& output_tensor,
     cuStreamWaitValue32(comm_streams_[nvl_rank_], curr_sig_flag_ptr, tag + step,
                         CU_STREAM_WAIT_VALUE_EQ);
 
-    // comm_streams_[nvl_rank_] tells comm_streams_[prev_rank] to start local copy.
+    // comm_streams_[prev_rank] tells comm_streams_[nvl_rank_] local copy ends.
     cuStreamWriteValue32(comm_streams_[prev_rank], local_copy_end_ptr, tag + step, 0);
     cuStreamWaitValue32(comm_streams_[nvl_rank_], local_copy_end_ptr, tag + step,
                         CU_STREAM_WAIT_VALUE_EQ);

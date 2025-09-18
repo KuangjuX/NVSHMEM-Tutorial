@@ -118,12 +118,6 @@ class Buffer {
 
   // Use prime number as start and stride to avoid
   // collision among different calls.
-  const uint32_t PRIME_TAG_START{13};
-
-  // TODO(Gin): Support adaptive stride to ensure
-  // stride is greater than num_nvl_ranks_.
-  const uint32_t PRIME_TAG_STRIDE{971};
-
   uint32_t tag{PRIME_TAG_START};
 };
 }  // namespace nvshmem_tutorial
